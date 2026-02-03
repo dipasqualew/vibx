@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "noUnusedLocals": false,
+    "jsx": "preserve",
+    "jsxImportSource": "vue"
+  },
+  "include": ["src", "src/**/*.vue"]
+}

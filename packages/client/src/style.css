@@ -1,0 +1,143 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+.tab-bar {
+  display: flex;
+  align-items: center;
+  background: #252526;
+  border-bottom: 1px solid #3c3c3c;
+  height: 36px;
+  flex-shrink: 0;
+  overflow-x: auto;
+  user-select: none;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  height: 100%;
+  cursor: pointer;
+  border-right: 1px solid #3c3c3c;
+  font-size: 13px;
+  color: #969696;
+  white-space: nowrap;
+}
+
+.tab.active {
+  background: #1e1e1e;
+  color: #d4d4d4;
+}
+
+.tab:hover {
+  background: #2a2d2e;
+}
+
+.tab-label {
+  margin-right: 8px;
+}
+
+.tab-close {
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  border-radius: 3px;
+}
+
+.tab-close:hover {
+  background: #5a5a5a;
+  color: #fff;
+}
+
+.tab-add {
+  background: none;
+  border: none;
+  color: #969696;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0 12px;
+  height: 100%;
+  line-height: 1;
+}
+
+.tab-add:hover {
+  color: #d4d4d4;
+  background: #2a2d2e;
+}
+
+.terminal-area {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+.terminal-container {
+  position: absolute;
+  inset: 0;
+  padding: 4px;
+}
+
+.pane-container {
+  display: flex;
+  flex: 1;
+  position: absolute;
+  inset: 0;
+}
+
+.pane-split {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.pane-split-vertical {
+  flex-direction: row;
+}
+
+.pane-split-horizontal {
+  flex-direction: column;
+}
+
+.pane-leaf {
+  flex: 1;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+
+.pane-leaf.dimmed::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.pane-divider-vertical {
+  width: 2px;
+  background: #3c3c3c;
+  flex-shrink: 0;
+  cursor: col-resize;
+}
+
+.pane-divider-horizontal {
+  height: 2px;
+  background: #3c3c3c;
+  flex-shrink: 0;
+  cursor: row-resize;
+}
