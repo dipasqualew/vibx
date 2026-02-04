@@ -42,3 +42,9 @@ export async function listIssues(): Promise<IssueListItem[]> {
   if (!res.ok) throw new Error(`Failed to list issues: ${res.status}`);
   return (await res.json()) as IssueListItem[];
 }
+
+export async function listGitHubRepositories(): Promise<string[]> {
+  const res = await fetch("/api/github/repositories");
+  if (!res.ok) throw new Error(`Failed to list repositories: ${res.status}`);
+  return (await res.json()) as string[];
+}

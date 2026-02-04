@@ -1,7 +1,7 @@
 import type { PtyManager } from "@vibx2/shared";
 
-import type { IssuesRouteDeps } from "../issues/routes.js";
-import { handleIssuesRequest } from "../issues/routes.js";
+import type { IssuesRouteDeps, GitHubRouteDeps } from "../issues/routes.js";
+import { handleIssuesRequest, handleGitHubRequest } from "../issues/routes.js";
 import type { SettingsRouteDeps } from "../settings/routes.js";
 import type { SettingsStore } from "../settings/store.js";
 import { handleSettingsRequest } from "../settings/routes.js";
@@ -109,11 +109,12 @@ interface ServeOptionsDeps {
   bridge: WsBridge;
   settingsRouteDeps: SettingsRouteDeps;
   issuesRouteDeps: IssuesRouteDeps;
+  githubRouteDeps: GitHubRouteDeps;
   getWrapper: (ws: PtyWebSocket) => WsConnection;
 }
 
 function buildServeOptions(deps: ServeOptionsDeps): Bun.Serve.Options<WsConnectionData> {
-  const { config, bridge, settingsRouteDeps, issuesRouteDeps, getWrapper } = deps;
+  const { config, bridge, settingsRouteDeps, issuesRouteDeps, githubRouteDeps, getWrapper } = deps;
   return {
     port: config.port,
     async fetch(req, srv) {
@@ -122,6 +123,9 @@ function buildServeOptions(deps: ServeOptionsDeps): Bun.Serve.Options<WsConnecti
 
       const issuesResponse = await handleIssuesRequest(req, issuesRouteDeps);
       if (issuesResponse) return issuesResponse;
+
+      const githubResponse = await handleGitHubRequest(req, githubRouteDeps);
+      if (githubResponse) return githubResponse;
 
       const apiResponse = await handleApiRequest(req, bridge);
       if (apiResponse) return apiResponse;
@@ -171,7 +175,13 @@ export function createWsServer(config: WsServerConfig): { start: () => void; sto
   const issuesRouteDeps: IssuesRouteDeps = {
     getBackend: config.createIssuesBackend,
   };
-  const options = buildServeOptions({ config, bridge, settingsRouteDeps, issuesRouteDeps, getWrapper });
+  const githubRouteDeps: GitHubRouteDeps = {
+    getToken: async () => {
+      const settings = await config.settingsStore.getSettings(config.userId);
+      return settings.issue_provider__github__github_token || null;
+    },
+  };
+  const options = buildServeOptions({ config, bridge, settingsRouteDeps, issuesRouteDeps, githubRouteDeps, getWrapper });
   let server: Bun.Server<WsConnectionData> | undefined;
 
   return {

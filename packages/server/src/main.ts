@@ -22,7 +22,12 @@ async function createIssuesBackend(): Promise<IssuesBackend> {
   const settings = await settingsStore.getSettings(userId);
   const token = settings.issue_provider__github__github_token;
   if (token) {
-    return new GitHubIssuesBackend({ owner: "", repo: "", token });
+    return new GitHubIssuesBackend({
+      owner: "",
+      repo: "",
+      token,
+      repositories: settings.issue_provider__github__repositories,
+    });
   }
   return new FileSystemIssuesBackend(join(dataDir, userId, "issues"));
 }

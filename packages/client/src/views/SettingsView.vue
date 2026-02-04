@@ -29,6 +29,19 @@
             class="mb-2"
           />
 
+          <v-autocomplete
+            v-if="form.issue_provider === 'github' && form.issue_provider__github__github_token"
+            v-model="form.issue_provider__github__repositories"
+            :items="availableRepos"
+            :loading="loadingRepos"
+            label="Repositories"
+            multiple
+            chips
+            closable-chips
+            variant="outlined"
+            class="mb-2"
+          />
+
           <v-select
             v-model="form.default_agent_framework"
             label="Default Agent Framework"
@@ -45,12 +58,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from "vue";
+import { ref, reactive, onMounted, watch } from "vue";
 import type { UserSettings } from "@vibx2/shared";
 import { DEFAULT_USER_SETTINGS } from "@vibx2/shared";
+import { listGitHubRepositories } from "../api";
 
 const form = reactive<UserSettings>({ ...DEFAULT_USER_SETTINGS });
 const loading = ref(false);
+const loadingRepos = ref(false);
+const availableRepos = ref<string[]>([]);
 const error = ref("");
 const saved = ref(false);
 
@@ -86,8 +102,28 @@ async function save() {
   }
 }
 
-onMounted(() => {
-  void loadSettings();
+async function fetchRepos() {
+  if (form.issue_provider !== "github" || !form.issue_provider__github__github_token) {
+    availableRepos.value = [];
+    return;
+  }
+  loadingRepos.value = true;
+  try {
+    availableRepos.value = await listGitHubRepositories();
+  } catch {
+    availableRepos.value = [];
+  } finally {
+    loadingRepos.value = false;
+  }
+}
+
+watch(() => form.issue_provider__github__github_token, () => {
+  void fetchRepos();
+});
+
+onMounted(async () => {
+  await loadSettings();
+  void fetchRepos();
 });
 </script>
 

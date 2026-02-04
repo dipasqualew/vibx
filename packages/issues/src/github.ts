@@ -7,6 +7,7 @@ interface GitHubIssuesBackendOptions {
   owner: string;
   repo: string;
   token: string;
+  repositories?: string[];
 }
 
 const STATUS_LABELS = ["status:in_progress", "status:in_review"] as const;
@@ -66,11 +67,13 @@ export class GitHubIssuesBackend implements IssuesBackend {
   private gql: typeof graphql;
   private owner: string;
   private repo: string;
+  private repositories: string[];
   private repoId: string | null = null;
 
-  constructor({ owner, repo, token }: GitHubIssuesBackendOptions) {
+  constructor({ owner, repo, token, repositories }: GitHubIssuesBackendOptions) {
     this.owner = owner;
     this.repo = repo;
+    this.repositories = repositories ?? [];
     this.gql = graphql.defaults({
       headers: { authorization: `token ${token}` },
     });
@@ -103,56 +106,39 @@ export class GitHubIssuesBackend implements IssuesBackend {
   }
 
   async listIssues(): Promise<Issue[]> {
-    interface ListIssuesResponse {
-      viewer: {
-        repositories: {
-          nodes: Array<{
-            owner: { login: string };
-            name: string;
-            issues: {
-              nodes: GraphQLIssueNode[];
-              pageInfo: { hasNextPage: boolean; endCursor: string | null };
-            };
-          }>;
-          pageInfo: { hasNextPage: boolean; endCursor: string | null };
-        };
-      };
-    }
+    if (this.repositories.length === 0) return [];
 
     const issues: Issue[] = [];
-    let hasNextPage = true;
-    let cursor: string | null = null;
 
-    while (hasNextPage) {
-      const result: ListIssuesResponse = await this.gql<ListIssuesResponse>(`
-        query ($cursor: String) {
-          viewer {
-            repositories(first: 20, after: $cursor, ownerAffiliations: OWNER) {
-              nodes {
-                owner { login }
-                name
-                issues(first: 50, states: OPEN) {
-                  nodes { ${ISSUE_FIELDS} }
-                  pageInfo { hasNextPage endCursor }
-                }
+    for (const fullName of this.repositories) {
+      const [owner, repo] = fullName.split("/");
+      if (!owner || !repo) continue;
+
+      let hasNextPage = true;
+      let cursor: string | null = null;
+
+      while (hasNextPage) {
+        const result = await this.gql<ListRepoIssuesResponse>(`
+          query ($owner: String!, $repo: String!, $cursor: String) {
+            repository(owner: $owner, name: $repo) {
+              issues(first: 50, states: OPEN, after: $cursor) {
+                nodes { ${ISSUE_FIELDS} }
+                pageInfo { hasNextPage endCursor }
               }
-              pageInfo { hasNextPage endCursor }
             }
           }
-        }
-      `, { cursor });
+        `, { owner, repo, cursor });
 
-      for (const repo of result.viewer.repositories.nodes) {
-        for (const node of repo.issues.nodes) {
-          const issue = toIssue(node, repo.owner.login, repo.name);
+        for (const node of result.repository.issues.nodes) {
+          const issue = toIssue(node, owner, repo);
           if (issue.status !== "done" && issue.status !== "wont_do") {
             issues.push(issue);
           }
         }
-      }
 
-      hasNextPage = result.viewer.repositories.pageInfo.hasNextPage;
-      cursor = result.viewer.repositories.pageInfo.endCursor;
+        hasNextPage = result.repository.issues.pageInfo.hasNextPage;
+        cursor = result.repository.issues.pageInfo.endCursor;
+      }
     }
 
     return issues;
@@ -383,4 +369,54 @@ export class GitHubIssuesBackend implements IssuesBackend {
 
     return toIssue(result.addLabelsToLabelable.labelable, this.owner, this.repo);
   }
+}
+
+interface ListRepoIssuesResponse {
+  repository: {
+    issues: {
+      nodes: GraphQLIssueNode[];
+      pageInfo: { hasNextPage: boolean; endCursor: string | null };
+    };
+  };
+}
+
+interface ListReposResponse {
+  viewer: {
+    repositories: {
+      nodes: Array<{ nameWithOwner: string }>;
+      pageInfo: { hasNextPage: boolean; endCursor: string | null };
+    };
+  };
+}
+
+export async function listGitHubRepositories(token: string): Promise<string[]> {
+  const gql = graphql.defaults({
+    headers: { authorization: `token ${token}` },
+  });
+
+  const repos: string[] = [];
+  let hasNextPage = true;
+  let cursor: string | null = null;
+
+  while (hasNextPage) {
+    const result: ListReposResponse = await gql<ListReposResponse>(`
+      query ($cursor: String) {
+        viewer {
+          repositories(first: 100, after: $cursor, ownerAffiliations: [OWNER, ORGANIZATION_MEMBER, COLLABORATOR]) {
+            nodes { nameWithOwner }
+            pageInfo { hasNextPage endCursor }
+          }
+        }
+      }
+    `, { cursor });
+
+    for (const node of result.viewer.repositories.nodes) {
+      repos.push(node.nameWithOwner);
+    }
+
+    hasNextPage = result.viewer.repositories.pageInfo.hasNextPage;
+    cursor = result.viewer.repositories.pageInfo.endCursor;
+  }
+
+  return repos;
 }
