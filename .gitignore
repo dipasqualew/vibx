@@ -5,3 +5,4 @@ test-results
 playwright-report
 .claude/settings.local.json
 .vibx-data
+.vibx2-data

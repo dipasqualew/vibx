@@ -128,6 +128,13 @@
               <v-list-item-subtitle>{{ action.steps.length }} step(s)</v-list-item-subtitle>
               <template #append>
                 <v-btn
+                  icon="mdi-play"
+                  size="small"
+                  variant="text"
+                  class="action-run-btn"
+                  @click.stop="run(action.id)"
+                />
+                <v-btn
                   icon="mdi-delete"
                   size="small"
                   variant="text"
@@ -153,6 +160,7 @@ import {
   createAction,
   updateAction,
   deleteAction,
+  runAction,
   listGitHubRepositories,
 } from "../api.js";
 import type { Action } from "../api.js";
@@ -289,6 +297,15 @@ async function remove(id: string) {
     await load();
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Failed to delete action";
+  }
+}
+
+async function run(id: string) {
+  error.value = "";
+  try {
+    await runAction(id);
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "Failed to run action";
   }
 }
 

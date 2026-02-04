@@ -27,6 +27,28 @@
             </template>
             <v-list-item-title>{{ issue.title }}</v-list-item-title>
             <v-list-item-subtitle>{{ issue.ref }}</v-list-item-subtitle>
+            <template #append>
+              <v-menu>
+                <template #activator="{ props }">
+                  <v-btn
+                    v-bind="props"
+                    icon="mdi-play"
+                    size="small"
+                    variant="text"
+                    class="issue-run-btn"
+                    :loading="runningActionId !== null"
+                  />
+                </template>
+                <v-list density="compact" class="issue-action-menu">
+                  <v-list-item
+                    v-for="action in actions"
+                    :key="action.id"
+                    :title="action.name"
+                    @click="triggerAction(action.id, issue)"
+                  />
+                </v-list>
+              </v-menu>
+            </template>
           </v-list-item>
         </v-list>
 
@@ -40,12 +62,14 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
-import { listIssues } from "../api.js";
-import type { IssueListItem } from "../api.js";
+import { listIssues, listActions, runAction } from "../api.js";
+import type { IssueListItem, Action } from "../api.js";
 
 const issues = ref<IssueListItem[]>([]);
+const actions = ref<Action[]>([]);
 const loading = ref(false);
 const error = ref("");
+const runningActionId = ref<string | null>(null);
 
 function statusColor(status: string): string {
   switch (status) {
@@ -65,6 +89,18 @@ function statusLabel(status: string): string {
   }
 }
 
+async function triggerAction(actionId: string, issue: IssueListItem) {
+  runningActionId.value = actionId;
+  error.value = "";
+  try {
+    await runAction(actionId, issue);
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "Failed to run action";
+  } finally {
+    runningActionId.value = null;
+  }
+}
+
 async function load() {
   loading.value = true;
   error.value = "";
@@ -77,8 +113,17 @@ async function load() {
   }
 }
 
+async function loadActions() {
+  try {
+    actions.value = await listActions();
+  } catch {
+    // actions are optional, don't block UI
+  }
+}
+
 onMounted(() => {
   void load();
+  void loadActions();
 });
 </script>
 

@@ -3,6 +3,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { test, expect } from "./fixtures.js";
+import type { Page } from "@playwright/test";
 
 const userId = execSync("whoami").toString().trim();
 
@@ -73,6 +74,49 @@ test("issues page filters out done issues", async ({ page, server }) => {
   await expect(page.getByRole("heading", { name: "Issues" })).toBeVisible({ timeout: 10_000 });
   await expect(page.getByText("Open issue")).toBeVisible({ timeout: 5_000 });
   await expect(page.getByText("Closed issue")).not.toBeVisible();
+});
+
+async function createActionViaApi(page: Page, serverUrl: string, name: string): Promise<void> {
+  await page.evaluate(
+    ({ serverUrl, name }) =>
+      fetch(`${serverUrl}/api/actions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          scope: "global",
+          steps: [{ type: "run-bash-command", command: "echo action-executed" }],
+        }),
+      }),
+    { serverUrl, name },
+  );
+}
+
+test("trigger action from issue row runs the action", async ({ page, server }) => {
+  // Seed an issue
+  await seedIssue(server.dataDir, 1, { title: "Test issue", status: "todo", labels: [], body: "body" });
+  await seedHistory(server.dataDir, "1 todo\n");
+
+  // Create an action via API
+  await createActionViaApi(page, server.serverUrl, "Echo Action");
+
+  await page.goto("/issues");
+  await expect(page.getByText("Test issue")).toBeVisible({ timeout: 10_000 });
+
+  // Click the play button on the issue row
+  await page.locator(".issue-run-btn").first().click();
+
+  // Select the action from the menu
+  const menuItem = page.locator(".issue-action-menu .v-list-item", { hasText: "Echo Action" });
+  await expect(menuItem).toBeVisible({ timeout: 5_000 });
+
+  // Intercept the run action request to verify it completes successfully
+  const responsePromise = page.waitForResponse(
+    (res) => res.url().includes("/api/actions/") && res.url().includes("/run") && res.request().method() === "POST",
+  );
+  await menuItem.click();
+  const response = await responsePromise;
+  expect(response.status()).toBe(200);
 });
 
 test("navigate to issues via nav bar", async ({ page }) => {

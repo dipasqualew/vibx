@@ -1,3 +1,5 @@
+import type { Page } from "@playwright/test";
+
 import { test, expect } from "./fixtures.js";
 
 test("navigate to actions via nav bar", async ({ page }) => {
@@ -112,4 +114,39 @@ test("delete an action", async ({ page }) => {
 
   // Should show empty state
   await expect(page.getByText("No actions found.")).toBeVisible({ timeout: 5_000 });
+});
+
+async function createActionViaApi(page: Page, serverUrl: string, name: string): Promise<void> {
+  await page.evaluate(
+    ({ serverUrl, name }) =>
+      fetch(`${serverUrl}/api/actions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          scope: "global",
+          steps: [{ type: "run-bash-command", command: "echo action-executed" }],
+        }),
+      }),
+    { serverUrl, name },
+  );
+}
+
+test("run action without issue context from actions view", async ({ page, server }) => {
+  await createActionViaApi(page, server.serverUrl, "Global Action");
+
+  await page.goto("/actions");
+  await expect(page.getByRole("heading", { name: "Actions" })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText("Global Action")).toBeVisible({ timeout: 5_000 });
+
+  // Intercept the run action request
+  const responsePromise = page.waitForResponse(
+    (res) => res.url().includes("/api/actions/") && res.url().includes("/run") && res.request().method() === "POST",
+  );
+
+  // Click the play button on the action row
+  await page.locator(".action-run-btn").first().click();
+
+  const response = await responsePromise;
+  expect(response.status()).toBe(200);
 });

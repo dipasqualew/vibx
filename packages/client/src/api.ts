@@ -134,19 +134,23 @@ export async function getSettings(): Promise<UserSettings> {
   return (await res.json()) as UserSettings;
 }
 
-export async function runAction(actionId: string, issue: IssueListItem): Promise<void> {
+export async function runAction(actionId: string, issue?: IssueListItem): Promise<void> {
   const res = await fetch(`${apiBase()}/api/actions/${actionId}/run`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      issue: {
-        ref: issue.ref,
-        title: issue.title,
-        body: issue.body,
-        status: issue.status,
-        labels: issue.labels,
-      },
-    }),
+    body: JSON.stringify(
+      issue
+        ? {
+            issue: {
+              ref: issue.ref,
+              title: issue.title,
+              body: issue.body,
+              status: issue.status,
+              labels: issue.labels,
+            },
+          }
+        : {},
+    ),
   });
   if (!res.ok) throw new Error(`Failed to run action: ${res.status}`);
 }
