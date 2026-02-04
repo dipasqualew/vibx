@@ -2,9 +2,11 @@
 set -euo pipefail
 
 usage() {
-  echo "Usage: worktree.sh [<github-issue-url> | <name>]"
+  echo "Usage: worktree.sh [<issue-ref> | <github-issue-url> | <name>]"
   echo "Examples:"
-  echo "  worktree.sh https://github.com/owner/repo/issues/42  # issue worktree"
+  echo "  worktree.sh https://github.com/owner/repo/issues/42  # issue worktree (full URL)"
+  echo "  worktree.sh '#3'                                      # issue worktree (local ref)"
+  echo "  worktree.sh owner/repo#3                              # issue worktree (qualified ref)"
   echo "  worktree.sh my-experiment                             # named worktree"
   echo "  worktree.sh                                           # timestamped worktree"
   exit 1
@@ -18,11 +20,41 @@ url=""
 claude_cmd=""
 
 if [[ $# -eq 1 ]] && [[ "$1" =~ github\.com/([^/]+)/([^/]+)/issues/([0-9]+) ]]; then
-  # GitHub issue mode
+  # GitHub issue URL mode
   owner="${BASH_REMATCH[1]}"
   repo="${BASH_REMATCH[2]}"
   issue="${BASH_REMATCH[3]}"
   url="$1"
+  branch="issue-${issue}"
+  worktree_dir="${toplevel}/../vibx-${issue}"
+  claude_cmd="/issue-solve $url"
+  echo "Owner:    $owner"
+  echo "Repo:     $repo"
+  echo "Issue:    #$issue"
+elif [[ $# -eq 1 ]] && [[ "$1" =~ ^#([0-9]+)$ ]]; then
+  # Local issue ref: #3 — infer owner/repo from git remote
+  issue="${BASH_REMATCH[1]}"
+  remote_url="$(git remote get-url origin)"
+  if [[ "$remote_url" =~ github\.com[:/]([^/]+)/([^/.]+) ]]; then
+    owner="${BASH_REMATCH[1]}"
+    repo="${BASH_REMATCH[2]}"
+  else
+    echo "Error: could not parse owner/repo from remote 'origin': $remote_url"
+    exit 1
+  fi
+  url="https://github.com/${owner}/${repo}/issues/${issue}"
+  branch="issue-${issue}"
+  worktree_dir="${toplevel}/../vibx-${issue}"
+  claude_cmd="/issue-solve $url"
+  echo "Owner:    $owner"
+  echo "Repo:     $repo"
+  echo "Issue:    #$issue"
+elif [[ $# -eq 1 ]] && [[ "$1" =~ ^([^/]+)/([^#]+)#([0-9]+)$ ]]; then
+  # Qualified issue ref: owner/repo#3
+  owner="${BASH_REMATCH[1]}"
+  repo="${BASH_REMATCH[2]}"
+  issue="${BASH_REMATCH[3]}"
+  url="https://github.com/${owner}/${repo}/issues/${issue}"
   branch="issue-${issue}"
   worktree_dir="${toplevel}/../vibx-${issue}"
   claude_cmd="/issue-solve $url"
