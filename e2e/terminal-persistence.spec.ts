@@ -57,10 +57,12 @@ test("terminal sessions persist across tab navigation", async ({ page }) => {
 
   // Terminal should reappear with a restored session
   await expect(page.locator(".xterm").first()).toBeVisible({ timeout: 10_000 });
-  await waitForPrompt(page, ".terminal-container");
 
-  // Verify the shell session is the same by echoing our marker
+  // The terminal may have been recreated with an empty buffer, so press Enter
+  // to trigger a fresh prompt before waiting.
   const restoredInput = page.locator(".xterm textarea").first();
+  await restoredInput.press("Enter");
+  await waitForPrompt(page, ".terminal-container");
   await restoredInput.pressSequentially("echo $VIBX_MARKER");
   await restoredInput.press("Enter");
 
@@ -96,6 +98,11 @@ test("multiple tabs persist across tab navigation", async ({ page }) => {
 
   // The active tab's terminal should be visible
   await expect(page.locator(".tab.active")).toHaveCount(1, { timeout: 5_000 });
+
+  // The terminal may have been recreated with an empty buffer, so press Enter
+  // to trigger a fresh prompt before waiting.
+  const restoredInput = page.locator(".xterm textarea").first();
+  await restoredInput.press("Enter");
   await waitForPrompt(page, ".terminal-container");
 });
 
@@ -121,10 +128,13 @@ test("terminal sessions persist across page refresh", async ({ page }) => {
 
   // Terminal should reappear with restored session
   await expect(page.locator(".xterm").first()).toBeVisible({ timeout: 10_000 });
-  await waitForPrompt(page, ".terminal-container");
 
-  // Verify the session is the same
+  // After reload the xterm buffer is empty because the terminal is recreated.
+  // The shell already printed its prompt before reconnection, so we press Enter
+  // to trigger a fresh prompt.
   const refreshedInput = page.locator(".xterm textarea").first();
+  await refreshedInput.press("Enter");
+  await waitForPrompt(page, ".terminal-container");
   await refreshedInput.pressSequentially("echo $VIBX_REFRESH");
   await refreshedInput.press("Enter");
 

@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "bun run --filter '@vibx2/server' dev & bun run --filter '@vibx2/client' dev & wait",
     "test": "bun run --filter '*' test",
+    "test:repeat": "for i in $(seq 1 ${REPEAT:-5}); do bun run --filter '*' test & done; wait",
     "test:e2e": "playwright test",
+    "test:e2e:repeat": "playwright test --repeat-each ${REPEAT:-5}",
     "lint": "eslint .",
     "lint:fix": "eslint --fix .",
     "build": "bun run --filter '*' build"
