@@ -2,7 +2,7 @@ import { join } from "node:path";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 
-import { test as base, expect } from "vitest";
+import { test as base, expect, vi } from "vitest";
 
 import { createActionsStore } from "./store.js";
 import type { ActionsStore } from "./store.js";
@@ -25,7 +25,27 @@ const test = base.extend<RouteFixtures>({
     await use(createActionsStore({ dataDir }));
   },
   deps: async ({ store }, use) => {
-    await use({ actionsStore: store, userId: "testuser" });
+    await use({
+      actionsStore: store,
+      userId: "testuser",
+      getBackend: vi.fn().mockResolvedValue({ changeStatus: vi.fn().mockResolvedValue({}) }),
+      ptyManager: {
+        create: vi.fn((_opts, events) => {
+          setTimeout(() => events.onExit("mock-id", 0), 0);
+          return { id: "mock-id", shell: "bash", pid: 1234 };
+        }),
+        write: vi.fn(),
+        resize: vi.fn(),
+        getSession: vi.fn(),
+        getSessions: vi.fn().mockReturnValue([]),
+        getPaneState: vi.fn(),
+        getPaneStates: vi.fn().mockReturnValue([]),
+        updatePaneState: vi.fn(),
+        destroy: vi.fn(),
+        destroyAll: vi.fn(),
+      },
+      sleep: vi.fn().mockResolvedValue(undefined),
+    });
   },
 });
 
@@ -148,4 +168,64 @@ test("OPTIONS /api/actions returns CORS preflight", async ({ deps }) => {
 test("returns null for non-matching paths", async ({ deps }) => {
   const res = await handleActionsRequest(makeRequest("GET", "/api/other"), deps);
   expect(res).toBeNull();
+});
+
+test("POST /api/actions/:id/run executes an action", async ({ deps }) => {
+  const createRes = await handleActionsRequest(
+    makeRequest("POST", "/api/actions", {
+      name: "Echo",
+      scope: "global",
+      steps: [{ type: "run-bash-command", command: "echo hello" }],
+    }),
+    deps,
+  );
+  const created = await createRes!.json();
+
+  const res = await handleActionsRequest(
+    makeRequest("POST", `/api/actions/${created.id}/run`, {}),
+    deps,
+  );
+  expect(res).not.toBeNull();
+  expect(res!.status).toBe(200);
+  const data = await res!.json();
+  expect(data).toEqual({ ok: true });
+});
+
+test("POST /api/actions/:id/run returns 404 for unknown action", async ({ deps }) => {
+  const res = await handleActionsRequest(
+    makeRequest("POST", "/api/actions/nonexistent/run", {}),
+    deps,
+  );
+  expect(res).not.toBeNull();
+  expect(res!.status).toBe(404);
+});
+
+test("POST /api/actions/:id/run with issue context", async ({ deps }) => {
+  const createRes = await handleActionsRequest(
+    makeRequest("POST", "/api/actions", {
+      name: "Status",
+      scope: "global",
+      steps: [{ type: "change-issue-status", targetStatus: "in_progress" }],
+    }),
+    deps,
+  );
+  const created = await createRes!.json();
+
+  const res = await handleActionsRequest(
+    makeRequest("POST", `/api/actions/${created.id}/run`, {
+      issue: { ref: "42", title: "Test", body: "", status: "todo", labels: [] },
+    }),
+    deps,
+  );
+  expect(res).not.toBeNull();
+  expect(res!.status).toBe(200);
+});
+
+test("OPTIONS /api/actions/:id/run returns CORS preflight", async ({ deps }) => {
+  const res = await handleActionsRequest(
+    makeRequest("OPTIONS", "/api/actions/some-id/run"),
+    deps,
+  );
+  expect(res).not.toBeNull();
+  expect(res!.status).toBe(204);
 });

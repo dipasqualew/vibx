@@ -1,10 +1,17 @@
 import type { Action } from "@vibx2/shared";
+import type { PtyManager } from "@vibx2/shared";
+import type { IssuesBackend } from "@vibx2/issues";
 
 import type { ActionsStore } from "./store.js";
+import { runAction } from "./engine.js";
+import type { IssueContext } from "./interpolate.js";
 
 export interface ActionsRouteDeps {
   actionsStore: ActionsStore;
   userId: string;
+  getBackend: () => Promise<IssuesBackend>;
+  ptyManager: PtyManager;
+  sleep: (ms: number) => Promise<void>;
 }
 
 const corsHeaders: Record<string, string> = {
@@ -18,6 +25,11 @@ function jsonResponse(data: unknown, status = 200): Response {
     status,
     headers: { "Content-Type": "application/json", ...corsHeaders },
   });
+}
+
+function parseActionRunId(pathname: string): string | undefined {
+  const match = /^\/api\/actions\/([^/]+)\/run$/.exec(pathname);
+  return match?.[1];
 }
 
 function parseActionId(pathname: string): string | undefined {
@@ -51,6 +63,27 @@ async function handleDelete(actionId: string, deps: ActionsRouteDeps): Promise<R
   return jsonResponse({ ok: true });
 }
 
+async function handleRun(req: Request, actionId: string, deps: ActionsRouteDeps): Promise<Response> {
+  const action = await deps.actionsStore.getAction(deps.userId, actionId);
+  if (!action) return jsonResponse({ error: "Action not found" }, 404);
+
+  let issue: IssueContext | undefined;
+  try {
+    const body = (await req.json()) as { issue?: IssueContext };
+    issue = body.issue;
+  } catch {
+    // no body is fine
+  }
+
+  await runAction(action, issue, {
+    getBackend: deps.getBackend,
+    ptyManager: deps.ptyManager,
+    sleep: deps.sleep,
+  });
+
+  return jsonResponse({ ok: true });
+}
+
 export async function handleActionsRequest(
   req: Request,
   deps: ActionsRouteDeps,
@@ -63,6 +96,15 @@ export async function handleActionsRequest(
     }
     if (req.method === "GET") return handleList(deps);
     if (req.method === "POST") return handleCreate(req, deps);
+    return new Response("Method Not Allowed", { status: 405, headers: corsHeaders });
+  }
+
+  const runActionId = parseActionRunId(pathname);
+  if (runActionId) {
+    if (req.method === "OPTIONS") {
+      return new Response(null, { status: 204, headers: corsHeaders });
+    }
+    if (req.method === "POST") return handleRun(req, runActionId, deps);
     return new Response("Method Not Allowed", { status: 405, headers: corsHeaders });
   }
 

@@ -198,6 +198,9 @@ export function createWsServer(config: WsServerConfig): { start: () => void; sto
   const actionsRouteDeps: ActionsRouteDeps = {
     actionsStore: config.actionsStore,
     userId: config.userId,
+    getBackend: config.createIssuesBackend,
+    ptyManager: config.ptyManager,
+    sleep: (ms: number) => new Promise((resolve) => setTimeout(resolve, ms)),
   };
   const paneRouteDeps: PaneRouteDeps = {
     ptyManager: config.ptyManager,
