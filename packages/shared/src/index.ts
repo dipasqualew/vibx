@@ -9,6 +9,8 @@ export type {
   PtySession,
   PtySessionEvents,
   PtyManager,
+  PaneState,
+  PaneStatePatch,
 } from "./pty.js";
 
 export type {

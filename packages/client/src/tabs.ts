@@ -1,11 +1,13 @@
-import { createSession, listSessions } from "./api.js";
+import { createSession, listSessions, listPanes, getPane, updatePane } from "./api.js";
 import { createTerminalConnection } from "./terminal.js";
 import { createPaneManager } from "./panes.js";
 import type { PaneManager } from "./panes.js";
 
 interface Tab {
   id: string;
+  sessionId: string;
   label: string;
+  bell: boolean;
   paneManager: PaneManager;
   tabElement: HTMLDivElement;
 }
@@ -43,6 +45,13 @@ function renderTabElement(tab: Tab, activeTabId: string | null, cbs: TabCallback
   const tabEl = document.createElement("div");
   tabEl.className = "tab" + (tab.id === activeTabId ? " active" : "");
 
+  if (tab.bell) {
+    const bellIndicator = document.createElement("span");
+    bellIndicator.className = "tab-bell";
+    bellIndicator.textContent = "\u2022";
+    tabEl.appendChild(bellIndicator);
+  }
+
   const label = document.createElement("span");
   label.className = "tab-label";
   label.textContent = tab.label;
@@ -76,7 +85,13 @@ function switchTab(state: TabState, id: string): void {
   for (const tab of state.tabs) {
     const isActive = tab.id === id;
     tab.paneManager.element.style.display = isActive ? "flex" : "none";
-    if (isActive) tab.paneManager.getActiveConnection().terminal.focus();
+    if (isActive) {
+      tab.paneManager.getActiveConnection().terminal.focus();
+      if (tab.bell) {
+        tab.bell = false;
+        void updatePane(tab.sessionId, { bell: false });
+      }
+    }
   }
 }
 
@@ -105,13 +120,23 @@ function createTabDom(container: HTMLElement, onAdd: () => void): TabDom {
   return { tabBar, terminalArea, addButton };
 }
 
+async function fetchTabLabel(sessionId: string, fallback: string): Promise<string> {
+  try {
+    const paneState = await getPane(sessionId);
+    return paneState.title || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 async function addNewTab(state: TabState, terminalArea: HTMLDivElement): Promise<string> {
   state.tabCounter++;
   const session = await createSession();
   const pm = createPaneManager({ initialConnection: createTerminalConnection(session.sessionId) });
   terminalArea.appendChild(pm.element);
   const id = `tab-${state.tabCounter}`;
-  state.tabs.push({ id, label: `Terminal ${state.tabCounter}`, paneManager: pm, tabElement: document.createElement("div") });
+  const label = await fetchTabLabel(session.sessionId, `Terminal ${state.tabCounter}`);
+  state.tabs.push({ id, sessionId: session.sessionId, label, bell: false, paneManager: pm, tabElement: document.createElement("div") });
   return id;
 }
 
@@ -120,7 +145,7 @@ function restoreExistingTab(state: TabState, terminalArea: HTMLDivElement, sessi
   const pm = createPaneManager({ initialConnection: createTerminalConnection(sessionId) });
   terminalArea.appendChild(pm.element);
   const id = `tab-${state.tabCounter}`;
-  state.tabs.push({ id, label: `Terminal ${state.tabCounter}`, paneManager: pm, tabElement: document.createElement("div") });
+  state.tabs.push({ id, sessionId, label: `Terminal ${state.tabCounter}`, bell: false, paneManager: pm, tabElement: document.createElement("div") });
   return id;
 }
 
@@ -142,11 +167,41 @@ function removeTab(state: TabState, id: string, actions: TabActions): void {
   actions.renderFn();
 }
 
+const PANE_POLL_INTERVAL_MS = 3000;
+
+async function pollPaneStates(state: TabState, render: () => void): Promise<void> {
+  try {
+    const paneStates = await listPanes();
+    const stateMap = new Map(paneStates.map((p) => [p.id, p]));
+    let changed = false;
+
+    for (const tab of state.tabs) {
+      const ps = stateMap.get(tab.sessionId);
+      if (!ps) continue;
+
+      if (ps.title && ps.title !== tab.label) {
+        tab.label = ps.title;
+        changed = true;
+      }
+      if (ps.bell && !tab.bell && tab.id !== state.activeTabId) {
+        tab.bell = true;
+        changed = true;
+      }
+    }
+
+    if (changed) render();
+  } catch {
+    // polling failure is non-fatal
+  }
+}
+
 export function createTabManager(container: HTMLElement): TabManager {
   const state: TabState = { tabs: [], activeTabId: null, tabCounter: 0 };
   const dom = createTabDom(container, () => void addTab());
   const cbs: TabCallbacks = { onSwitch: (id) => switchToTab(id), onClose: (id) => closeTab(id) };
   const render = () => renderAllTabs(state, dom, cbs);
+
+  setInterval(() => void pollPaneStates(state, render), PANE_POLL_INTERVAL_MS);
 
   function switchToTab(id: string) { switchTab(state, id); render(); }
   async function addTab() { switchToTab(await addNewTab(state, dom.terminalArea)); }

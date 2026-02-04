@@ -36,6 +36,9 @@ function createMockPtyManager(): MockPtyManager {
     resize: vi.fn(),
     getSession: vi.fn((id) => sessions.get(id)),
     getSessions: vi.fn(() => [...sessions.values()]),
+    getPaneState: vi.fn(),
+    getPaneStates: vi.fn(),
+    updatePaneState: vi.fn(),
     destroy: vi.fn(),
     destroyAll: vi.fn(),
   };
@@ -175,4 +178,34 @@ test("attachSession broadcasts exit with signal", ({ bridge, ptyManager, registr
   expect(ws.send).toHaveBeenCalledWith(
     JSON.stringify({ type: "exit", code: 1, signal: 15 }),
   );
+});
+
+test("attachSession detects bell character in data", ({ bridge, ptyManager, registry }) => {
+  const ws = createMockConnection();
+  registry.add("s1", ws);
+
+  bridge.attachSession("s1", { shell: "/bin/zsh" });
+  ptyManager.lastEvents?.onData("pty-1", "hello\x07world");
+
+  expect(ptyManager.updatePaneState).toHaveBeenCalledWith("s1", { bell: true });
+});
+
+test("attachSession does not set bell for data without bell char", ({ bridge, ptyManager, registry }) => {
+  const ws = createMockConnection();
+  registry.add("s1", ws);
+
+  bridge.attachSession("s1", { shell: "/bin/zsh" });
+  ptyManager.lastEvents?.onData("pty-1", "hello world");
+
+  expect(ptyManager.updatePaneState).not.toHaveBeenCalled();
+});
+
+test("createSession detects bell character in data", ({ bridge, ptyManager, registry }) => {
+  bridge.createSession({ shell: "/bin/bash" });
+  const ws = createMockConnection();
+  registry.add("pty-1", ws);
+
+  ptyManager.lastEvents?.onData("pty-1", "beep\x07");
+
+  expect(ptyManager.updatePaneState).toHaveBeenCalledWith("pty-1", { bell: true });
 });

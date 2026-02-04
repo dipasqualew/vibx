@@ -47,6 +47,44 @@ export async function listIssues(): Promise<IssueListItem[]> {
   return (await res.json()) as IssueListItem[];
 }
 
+export interface PaneStateInfo {
+  id: string;
+  title: string;
+  cwd: string;
+  bell: boolean;
+  pendingStdin: boolean;
+  notes: string[];
+}
+
+export interface PaneStatePatchInput {
+  title?: string;
+  bell?: boolean;
+  pendingStdin?: boolean;
+  notes?: string[];
+}
+
+export async function listPanes(): Promise<PaneStateInfo[]> {
+  const res = await fetch(`${apiBase()}/api/panes`);
+  if (!res.ok) throw new Error(`Failed to list panes: ${res.status}`);
+  return (await res.json()) as PaneStateInfo[];
+}
+
+export async function getPane(id: string): Promise<PaneStateInfo> {
+  const res = await fetch(`${apiBase()}/api/panes/${id}`);
+  if (!res.ok) throw new Error(`Failed to get pane: ${res.status}`);
+  return (await res.json()) as PaneStateInfo;
+}
+
+export async function updatePane(id: string, patch: PaneStatePatchInput): Promise<PaneStateInfo> {
+  const res = await fetch(`${apiBase()}/api/panes/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  if (!res.ok) throw new Error(`Failed to update pane: ${res.status}`);
+  return (await res.json()) as PaneStateInfo;
+}
+
 export async function listGitHubRepositories(): Promise<string[]> {
   const res = await fetch(`${apiBase()}/api/github/repositories`);
   if (!res.ok) throw new Error(`Failed to list repositories: ${res.status}`);

@@ -84,6 +84,12 @@ function handleClose(deps: WsBridgeDeps, ws: WsConnection, sessionId: string): v
   deps.registry.remove(sessionId, ws);
 }
 
+function detectBell(deps: WsBridgeDeps, id: string, data: string): void {
+  if (data.includes("\x07")) {
+    deps.ptyManager.updatePaneState(id, { bell: true });
+  }
+}
+
 function buildExitMessage(code: number, signal?: number): WsServerMessage {
   if (signal !== undefined) {
     return { type: "exit", code, signal };
@@ -98,6 +104,7 @@ function attachSession(
 ): PtySession {
   return deps.ptyManager.create(options, {
     onData: (_id, data) => {
+      detectBell(deps, sessionId, data);
       broadcastMessage(deps.registry, sessionId, { type: "output", data });
     },
     onExit: (_id, code, signal) => {
@@ -123,6 +130,7 @@ function createSessionWithDefaults(
 ): PtySession {
   return deps.ptyManager.create(resolveSpawnOptions(options), {
     onData: (id, data) => {
+      detectBell(deps, id, data);
       broadcastMessage(deps.registry, id, { type: "output", data });
     },
     onExit: (id, code, signal) => {

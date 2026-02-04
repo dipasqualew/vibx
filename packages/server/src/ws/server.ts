@@ -2,6 +2,8 @@ import type { PtyManager } from "@vibx2/shared";
 
 import type { IssuesRouteDeps, GitHubRouteDeps } from "../issues/routes.js";
 import { handleIssuesRequest, handleGitHubRequest } from "../issues/routes.js";
+import type { PaneRouteDeps } from "../pty/routes.js";
+import { handlePanesRequest } from "../pty/routes.js";
 import type { SettingsRouteDeps } from "../settings/routes.js";
 import type { SettingsStore } from "../settings/store.js";
 import { handleSettingsRequest } from "../settings/routes.js";
@@ -110,11 +112,12 @@ interface ServeOptionsDeps {
   settingsRouteDeps: SettingsRouteDeps;
   issuesRouteDeps: IssuesRouteDeps;
   githubRouteDeps: GitHubRouteDeps;
+  paneRouteDeps: PaneRouteDeps;
   getWrapper: (ws: PtyWebSocket) => WsConnection;
 }
 
 function buildServeOptions(deps: ServeOptionsDeps): Bun.Serve.Options<WsConnectionData> {
-  const { config, bridge, settingsRouteDeps, issuesRouteDeps, githubRouteDeps, getWrapper } = deps;
+  const { config, bridge, settingsRouteDeps, issuesRouteDeps, githubRouteDeps, paneRouteDeps, getWrapper } = deps;
   return {
     port: config.port,
     async fetch(req, srv) {
@@ -126,6 +129,9 @@ function buildServeOptions(deps: ServeOptionsDeps): Bun.Serve.Options<WsConnecti
 
       const githubResponse = await handleGitHubRequest(req, githubRouteDeps);
       if (githubResponse) return githubResponse;
+
+      const panesResponse = await handlePanesRequest(req, paneRouteDeps);
+      if (panesResponse) return panesResponse;
 
       const apiResponse = await handleApiRequest(req, bridge);
       if (apiResponse) return apiResponse;
@@ -181,7 +187,10 @@ export function createWsServer(config: WsServerConfig): { start: () => void; sto
       return settings.issue_provider__github__github_token || null;
     },
   };
-  const options = buildServeOptions({ config, bridge, settingsRouteDeps, issuesRouteDeps, githubRouteDeps, getWrapper });
+  const paneRouteDeps: PaneRouteDeps = {
+    ptyManager: config.ptyManager,
+  };
+  const options = buildServeOptions({ config, bridge, settingsRouteDeps, issuesRouteDeps, githubRouteDeps, paneRouteDeps, getWrapper });
   let server: Bun.Server<WsConnectionData> | undefined;
 
   return {

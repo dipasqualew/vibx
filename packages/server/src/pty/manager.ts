@@ -1,4 +1,5 @@
 import type {
+  PaneState,
   PtyManager,
   PtySession,
   PtySessionEvents,
@@ -51,14 +52,24 @@ function spawnProcess(
   options: PtySpawnOptions,
 ): InternalPtySession {
   const id = ctx.deps.generateId();
-  const process = ctx.deps.factory(options.shell, options.args ?? [], {
+  const cwd = options.cwd ?? globalThis.process.cwd();
+  const ptyProcess = ctx.deps.factory(options.shell, options.args ?? [], {
     env: options.env,
     cols: options.size?.cols,
     rows: options.size?.rows,
     cwd: options.cwd,
   });
 
-  return { id, shell: options.shell, process, disposables: [] };
+  const paneState: PaneState = {
+    id,
+    title: options.shell,
+    cwd,
+    bell: false,
+    pendingStdin: false,
+    notes: [],
+  };
+
+  return { id, shell: options.shell, process: ptyProcess, disposables: [], paneState };
 }
 
 function createSession(
@@ -96,6 +107,16 @@ export function createPtyManager(deps: PtyManagerDeps): PtyManager {
       return s ? toPublicSession(s) : undefined;
     },
     getSessions: () => [...ctx.sessions.values()].map(toPublicSession),
+    getPaneState: (id) => {
+      const s = ctx.sessions.get(id);
+      return s ? { ...s.paneState } : undefined;
+    },
+    getPaneStates: () => [...ctx.sessions.values()].map((s) => ({ ...s.paneState })),
+    updatePaneState: (id, patch) => {
+      const session = getSessionOrThrow(ctx, id);
+      Object.assign(session.paneState, patch);
+      return { ...session.paneState };
+    },
     destroy: (id) => destroySession(ctx, id),
     destroyAll: () => destroyAllSessions(ctx),
   };

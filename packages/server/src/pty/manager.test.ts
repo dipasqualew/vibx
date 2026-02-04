@@ -166,3 +166,71 @@ test("destroyAll kills all sessions", ({ events }) => {
   expect(manager.getSessions()).toHaveLength(0);
   processes.forEach((p) => expect(p.kill).toHaveBeenCalled());
 });
+
+test("getPaneState returns initial defaults", ({ factory, events }) => {
+  const manager = createPtyManager({ factory, generateId: () => "ps-1" });
+  manager.create(SPAWN_OPTIONS, events);
+
+  const state = manager.getPaneState("ps-1");
+
+  expect(state).toBeDefined();
+  expect(state!.id).toBe("ps-1");
+  expect(state!.title).toBe("/bin/bash");
+  expect(state!.bell).toBe(false);
+  expect(state!.pendingStdin).toBe(false);
+  expect(state!.notes).toEqual([]);
+});
+
+test("getPaneState returns undefined for unknown id", ({ factory }) => {
+  const manager = createPtyManager({ factory, generateId: () => "x" });
+
+  expect(manager.getPaneState("unknown")).toBeUndefined();
+});
+
+test("getPaneStates returns all pane states", ({ events }) => {
+  let callCount = 0;
+  const factory: PtyFactory = () => createMockProcess();
+  const manager = createPtyManager({ factory, generateId: () => `ps-${++callCount}` });
+
+  manager.create(SPAWN_OPTIONS, events);
+  manager.create(SPAWN_OPTIONS, events);
+
+  const states = manager.getPaneStates();
+  expect(states).toHaveLength(2);
+  expect(states[0]!.id).toBe("ps-1");
+  expect(states[1]!.id).toBe("ps-2");
+});
+
+test("updatePaneState applies patch", ({ factory, events }) => {
+  const manager = createPtyManager({ factory, generateId: () => "up-1" });
+  manager.create(SPAWN_OPTIONS, events);
+
+  const updated = manager.updatePaneState("up-1", { title: "my-title", bell: true });
+
+  expect(updated.title).toBe("my-title");
+  expect(updated.bell).toBe(true);
+  expect(updated.pendingStdin).toBe(false);
+});
+
+test("updatePaneState throws for unknown id", ({ factory }) => {
+  const manager = createPtyManager({ factory, generateId: () => "x" });
+
+  expect(() => manager.updatePaneState("unknown", { bell: true })).toThrow("PTY session not found: unknown");
+});
+
+test("getPaneState uses cwd from spawn options", ({ factory, events }) => {
+  const manager = createPtyManager({ factory, generateId: () => "cwd-1" });
+  manager.create({ shell: "/bin/bash", cwd: "/tmp" }, events);
+
+  const state = manager.getPaneState("cwd-1");
+  expect(state!.cwd).toBe("/tmp");
+});
+
+test("updatePaneState with notes", ({ factory, events }) => {
+  const manager = createPtyManager({ factory, generateId: () => "n-1" });
+  manager.create(SPAWN_OPTIONS, events);
+
+  const updated = manager.updatePaneState("n-1", { notes: ["note1", "note2"] });
+
+  expect(updated.notes).toEqual(["note1", "note2"]);
+});

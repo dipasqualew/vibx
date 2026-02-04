@@ -1,4 +1,5 @@
-import { createSession, deleteSession } from "./api.js";
+import { createSession, deleteSession, getPane } from "./api.js";
+import type { PaneStateInfo } from "./api.js";
 import { createTerminalConnection } from "./terminal.js";
 import type { TerminalConnection } from "./terminal.js";
 
@@ -7,6 +8,7 @@ interface PaneLeaf {
   id: string;
   connection: TerminalConnection;
   element: HTMLDivElement;
+  statusBar: HTMLDivElement | null;
 }
 
 interface PaneSplit {
@@ -117,11 +119,35 @@ function findNavigationTarget(
   return null;
 }
 
+function renderStatusBar(statusBar: HTMLDivElement, paneState: PaneStateInfo): void {
+  statusBar.innerHTML = "";
+
+  if (paneState.pendingStdin) {
+    const badge = document.createElement("span");
+    badge.className = "pane-status-stdin";
+    badge.textContent = "stdin";
+    statusBar.appendChild(badge);
+  }
+
+  for (const note of paneState.notes) {
+    const noteEl = document.createElement("span");
+    noteEl.className = "pane-status-note";
+    noteEl.textContent = note;
+    statusBar.appendChild(noteEl);
+  }
+}
+
 function createLeafElement(leaf: PaneLeaf, isActive: boolean): HTMLDivElement {
   const el = document.createElement("div");
   el.className = "pane-leaf" + (isActive ? "" : " dimmed");
   el.dataset["paneId"] = leaf.id;
   el.appendChild(leaf.connection.element);
+
+  const statusBar = document.createElement("div");
+  statusBar.className = "pane-status-bar";
+  el.appendChild(statusBar);
+  leaf.statusBar = statusBar;
+
   leaf.element = el;
   return el;
 }
@@ -164,7 +190,14 @@ function renderState(state: PaneState, container: HTMLDivElement) {
   container.appendChild(renderNode(state.root, state.activeId));
 
   const activeLeaf = findLeaf(state.root, state.activeId);
-  if (activeLeaf) activeLeaf.connection.terminal.focus();
+  if (activeLeaf) {
+    activeLeaf.connection.terminal.focus();
+    if (activeLeaf.statusBar) {
+      void getPane(activeLeaf.connection.sessionId).then((ps) => {
+        if (activeLeaf.statusBar) renderStatusBar(activeLeaf.statusBar, ps);
+      }).catch(() => {});
+    }
+  }
 }
 
 interface SplitParams {
@@ -184,6 +217,7 @@ function performSplit(state: PaneState, params: SplitParams): string {
     id: newLeafId,
     connection: newConnection,
     element: document.createElement("div"),
+    statusBar: null,
   };
   newConnection.onExit = () => onExit(newLeafId);
 
@@ -255,7 +289,7 @@ async function doSplit(ctx: PaneContext, direction: "horizontal" | "vertical"): 
 function initPaneState(connection: TerminalConnection): { state: PaneState; initialId: string } {
   const initialId = nextPaneId();
   const state: PaneState = {
-    root: { type: "leaf", id: initialId, connection, element: document.createElement("div") },
+    root: { type: "leaf", id: initialId, connection, element: document.createElement("div"), statusBar: null },
     activeId: initialId,
   };
   return { state, initialId };
