@@ -1,3 +1,4 @@
+import { homedir } from "node:os";
 import { join } from "node:path";
 
 import { GitHubIssuesBackend, FileSystemIssuesBackend } from "@vibx2/issues";
@@ -9,7 +10,7 @@ import { createSettingsStore } from "./settings/store.js";
 const PORT = Number(process.env["PORT"] ?? 3000);
 
 const userId = (await Bun.$`whoami`.text()).trim();
-const dataDir = process.env["VIBX_DATA_DIR"] ?? join(process.cwd(), ".vibx2-data");
+const dataDir = process.env["VIBX_DATA_DIR"] ?? join(homedir(), ".vibx");
 
 const ptyManager = createPtyManager({
   factory: bunPtyFactory,
