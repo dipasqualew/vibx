@@ -35,14 +35,15 @@ test("create an action with steps and verify it appears in the list", async ({ p
   // Fill in name
   await page.getByLabel("Action Name").fill("Deploy Pipeline");
 
-  // Helper to add a step via the menu, waiting for stability
+  // Helper to add a step via the menu, retrying through overlay animation
   async function addStep(menuItemText: string, chipText: string) {
     // Ensure no overlay is active before opening the menu
     await expect(page.locator(".v-overlay--active")).toHaveCount(0);
     await page.getByRole("button", { name: "Add Step" }).click();
-    // Wait for menu content to be visible
-    await expect(page.locator(".v-overlay--active")).toHaveCount(1);
-    await page.locator(".v-overlay--active").getByText(menuItemText).click();
+    // Vuetify may recreate overlay DOM during open animation, so retry the click
+    await expect(async () => {
+      await page.locator(".v-overlay--active").getByText(menuItemText).click({ timeout: 500 });
+    }).toPass({ timeout: 5_000 });
     // Wait for the step chip to confirm the step was added
     await expect(page.getByText(chipText).first()).toBeVisible();
   }
