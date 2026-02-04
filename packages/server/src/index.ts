@@ -36,3 +36,6 @@ export type {
 
 export { createSettingsStore } from "./settings/index.js";
 export type { SettingsStore, SettingsStoreDeps } from "./settings/index.js";
+
+export { createActionsStore } from "./actions/index.js";
+export type { ActionsStore, ActionsStoreDeps } from "./actions/index.js";

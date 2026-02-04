@@ -1,5 +1,8 @@
 import type { PtyManager } from "@vibx2/shared";
 
+import type { ActionsRouteDeps } from "../actions/routes.js";
+import type { ActionsStore } from "../actions/store.js";
+import { handleActionsRequest } from "../actions/routes.js";
 import type { IssuesRouteDeps, GitHubRouteDeps } from "../issues/routes.js";
 import { handleIssuesRequest, handleGitHubRequest } from "../issues/routes.js";
 import type { PaneRouteDeps } from "../pty/routes.js";
@@ -17,6 +20,7 @@ export interface WsServerConfig {
   ptyManager: PtyManager;
   userId: string;
   settingsStore: SettingsStore;
+  actionsStore: ActionsStore;
   createIssuesBackend: () => Promise<import("@vibx2/issues").IssuesBackend>;
 }
 
@@ -109,6 +113,7 @@ async function handleApiRequest(req: Request, bridge: WsBridge): Promise<Respons
 interface ServeOptionsDeps {
   config: WsServerConfig;
   bridge: WsBridge;
+  actionsRouteDeps: ActionsRouteDeps;
   settingsRouteDeps: SettingsRouteDeps;
   issuesRouteDeps: IssuesRouteDeps;
   githubRouteDeps: GitHubRouteDeps;
@@ -117,10 +122,13 @@ interface ServeOptionsDeps {
 }
 
 function buildServeOptions(deps: ServeOptionsDeps): Bun.Serve.Options<WsConnectionData> {
-  const { config, bridge, settingsRouteDeps, issuesRouteDeps, githubRouteDeps, paneRouteDeps, getWrapper } = deps;
+  const { config, bridge, actionsRouteDeps, settingsRouteDeps, issuesRouteDeps, githubRouteDeps, paneRouteDeps, getWrapper } = deps;
   return {
     port: config.port,
     async fetch(req, srv) {
+      const actionsResponse = await handleActionsRequest(req, actionsRouteDeps);
+      if (actionsResponse) return actionsResponse;
+
       const settingsResponse = await handleSettingsRequest(req, settingsRouteDeps);
       if (settingsResponse) return settingsResponse;
 
@@ -187,10 +195,14 @@ export function createWsServer(config: WsServerConfig): { start: () => void; sto
       return settings.issue_provider__github__github_token || null;
     },
   };
+  const actionsRouteDeps: ActionsRouteDeps = {
+    actionsStore: config.actionsStore,
+    userId: config.userId,
+  };
   const paneRouteDeps: PaneRouteDeps = {
     ptyManager: config.ptyManager,
   };
-  const options = buildServeOptions({ config, bridge, settingsRouteDeps, issuesRouteDeps, githubRouteDeps, paneRouteDeps, getWrapper });
+  const options = buildServeOptions({ config, bridge, actionsRouteDeps, settingsRouteDeps, issuesRouteDeps, githubRouteDeps, paneRouteDeps, getWrapper });
   let server: Bun.Server<WsConnectionData> | undefined;
 
   return {

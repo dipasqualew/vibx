@@ -28,3 +28,12 @@ export { isWsClientMessage } from "./ws.js";
 
 export type { UserSettings } from "./settings.js";
 export { DEFAULT_USER_SETTINGS } from "./settings.js";
+
+export type {
+  ActionStepType,
+  ActionStepChangeIssueStatus,
+  ActionStepRunBashCommand,
+  ActionStepSleep,
+  ActionStep,
+  Action,
+} from "./actions.js";

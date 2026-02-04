@@ -5,6 +5,7 @@ import { GitHubIssuesBackend, FileSystemIssuesBackend } from "@vibx2/issues";
 import type { IssuesBackend } from "@vibx2/issues";
 
 import { createPtyManager, bunPtyFactory, generateSessionId, createWsServer } from "./index.js";
+import { createActionsStore } from "./actions/store.js";
 import { createSettingsStore } from "./settings/store.js";
 
 const PORT = Number(process.env["PORT"] ?? 3000);
@@ -18,6 +19,7 @@ const ptyManager = createPtyManager({
 });
 
 const settingsStore = createSettingsStore({ dataDir });
+const actionsStore = createActionsStore({ dataDir });
 
 async function createIssuesBackend(): Promise<IssuesBackend> {
   const settings = await settingsStore.getSettings(userId);
@@ -33,7 +35,7 @@ async function createIssuesBackend(): Promise<IssuesBackend> {
   return new FileSystemIssuesBackend(join(dataDir, userId, "issues"));
 }
 
-const server = createWsServer({ port: PORT, ptyManager, userId, settingsStore, createIssuesBackend });
+const server = createWsServer({ port: PORT, ptyManager, userId, settingsStore, actionsStore, createIssuesBackend });
 server.start();
 
 console.log(`Server listening on http://localhost:${PORT} (user: ${userId})`);
