@@ -5,6 +5,7 @@
       <template #append>
         <v-btn to="/" variant="text" size="small">Terminal</v-btn>
         <v-btn to="/issues" variant="text" size="small">Issues</v-btn>
+        <v-btn to="/actions" variant="text" size="small">Actions</v-btn>
         <v-btn to="/settings" variant="text" size="small">Settings</v-btn>
       </template>
     </v-app-bar>

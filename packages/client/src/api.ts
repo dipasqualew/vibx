@@ -91,3 +91,37 @@ export async function listGitHubRepositories(): Promise<string[]> {
   if (!res.ok) throw new Error(`Failed to list repositories: ${res.status}`);
   return (await res.json()) as string[];
 }
+
+import type { Action } from "@vibx2/shared";
+export type { Action };
+
+export async function listActions(): Promise<Action[]> {
+  const res = await fetch(`${apiBase()}/api/actions`);
+  if (!res.ok) throw new Error(`Failed to list actions: ${res.status}`);
+  return (await res.json()) as Action[];
+}
+
+export async function createAction(input: Omit<Action, "id">): Promise<Action> {
+  const res = await fetch(`${apiBase()}/api/actions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw new Error(`Failed to create action: ${res.status}`);
+  return (await res.json()) as Action;
+}
+
+export async function updateAction(id: string, patch: Partial<Omit<Action, "id">>): Promise<Action> {
+  const res = await fetch(`${apiBase()}/api/actions/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  if (!res.ok) throw new Error(`Failed to update action: ${res.status}`);
+  return (await res.json()) as Action;
+}
+
+export async function deleteAction(id: string): Promise<void> {
+  const res = await fetch(`${apiBase()}/api/actions/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(`Failed to delete action: ${res.status}`);
+}
