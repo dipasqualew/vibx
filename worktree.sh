@@ -58,7 +58,15 @@ echo "Removed worktree at $worktree_dir"
 # Check if the branch has any commits beyond main
 if git log "main..${branch}" --oneline | grep -q .; then
   # Rebase branch onto current main (which may have moved), then fast-forward
-  git rebase main "$branch"
+  if ! git rebase main "$branch"; then
+    echo "Rebase conflicts detected — asking Claude to resolve..."
+    while [[ -d "$(git rev-parse --git-dir)/rebase-merge" ]] || [[ -d "$(git rev-parse --git-dir)/rebase-apply" ]]; do
+      # Let Claude resolve all conflicted files
+      claude "There are git rebase conflicts. Resolve all merge conflicts in the working tree, then stage the resolved files with git add. Do NOT run git rebase --continue yourself."
+      git rebase --continue || true
+    done
+    echo "Rebase completed after conflict resolution"
+  fi
   git checkout main
   git merge --ff-only "$branch"
   git branch -d "$branch"
