@@ -2,32 +2,45 @@
 set -euo pipefail
 
 usage() {
-  echo "Usage: worktree.sh <github-issue-url>"
-  echo "Example: worktree.sh https://github.com/owner/repo/issues/42"
+  echo "Usage: worktree.sh [<github-issue-url> | <name>]"
+  echo "Examples:"
+  echo "  worktree.sh https://github.com/owner/repo/issues/42  # issue worktree"
+  echo "  worktree.sh my-experiment                             # named worktree"
+  echo "  worktree.sh                                           # timestamped worktree"
   exit 1
 }
 
-[[ $# -ne 1 ]] && usage
+[[ $# -gt 1 ]] && usage
 
-url="$1"
+origin_dir="$(pwd)"
+toplevel="$(git rev-parse --show-toplevel)"
+url=""
+claude_cmd=""
 
-# Parse owner/repo/issue from URL
-if [[ "$url" =~ github\.com/([^/]+)/([^/]+)/issues/([0-9]+) ]]; then
+if [[ $# -eq 1 ]] && [[ "$1" =~ github\.com/([^/]+)/([^/]+)/issues/([0-9]+) ]]; then
+  # GitHub issue mode
   owner="${BASH_REMATCH[1]}"
   repo="${BASH_REMATCH[2]}"
   issue="${BASH_REMATCH[3]}"
+  url="$1"
+  branch="issue-${issue}"
+  worktree_dir="${toplevel}/../vibx-${issue}"
+  claude_cmd="/issue-solve $url"
+  echo "Owner:    $owner"
+  echo "Repo:     $repo"
+  echo "Issue:    #$issue"
+elif [[ $# -eq 1 ]]; then
+  # Named worktree
+  branch="$1"
+  worktree_dir="${toplevel}/../vibx-${branch}"
+  echo "Mode:     named worktree"
 else
-  echo "Error: could not parse GitHub issue URL: $url"
-  usage
+  # No args — timestamped worktree
+  branch="worktree-$(date +%Y%m%d-%H%M%S)"
+  worktree_dir="${toplevel}/../vibx-${branch}"
+  echo "Mode:     timestamped worktree"
 fi
 
-origin_dir="$(pwd)"
-worktree_dir="$(git rev-parse --show-toplevel)/../vibx-${issue}"
-branch="issue-${issue}"
-
-echo "Owner:    $owner"
-echo "Repo:     $repo"
-echo "Issue:    #$issue"
 echo "Worktree: $worktree_dir"
 echo "Branch:   $branch"
 echo ""
@@ -47,7 +60,11 @@ echo "Installing dependencies..."
 # Run Claude Code
 echo ""
 echo "Starting Claude Code..."
-(cd "$worktree_dir" && claude "/issue-solve $url") || true
+if [[ -n "$claude_cmd" ]]; then
+  (cd "$worktree_dir" && claude "$claude_cmd") || true
+else
+  (cd "$worktree_dir" && claude) || true
+fi
 
 # Merge commits into main
 echo ""
