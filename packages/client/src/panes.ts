@@ -22,12 +22,20 @@ interface PaneSplit {
 
 type PaneNode = PaneLeaf | PaneSplit;
 
+export interface PickerItem {
+  id: string;
+  label: string;
+  detail?: string;
+}
+
 export interface PaneManager {
   splitVertical: () => void;
   splitHorizontal: () => void;
   navigate: (direction: "up" | "down" | "left" | "right") => void;
   closePane: (id: string) => void;
   activatePane: (id: string, connection: TerminalConnection) => void;
+  showPickerInPane: (paneId: string, title: string, items: PickerItem[], onSelect: (id: string) => void, onBack: () => void) => void;
+  restoreLauncherInPane: (paneId: string) => void;
   getActiveConnection: () => TerminalConnection | null;
   dispose: () => void;
   readonly element: HTMLDivElement;
@@ -39,6 +47,7 @@ export interface CreatePaneManagerOptions {
   onPaneClosed?: (sessionId: string) => void;
   onLauncherSelect?: (paneId: string) => void;
   onClaudeSelect?: (paneId: string) => void;
+  onActionSelect?: (paneId: string) => void;
 }
 
 let paneIdCounter = 0;
@@ -144,6 +153,52 @@ function renderStatusBar(statusBar: HTMLDivElement, paneState: PaneStateInfo): v
 interface LauncherCallbacks {
   onLauncherSelect: (paneId: string) => void;
   onClaudeSelect: (paneId: string) => void;
+  onActionSelect: (paneId: string) => void;
+}
+
+function createPickerElement(title: string, items: PickerItem[], onSelect: (id: string) => void, onBack: () => void): HTMLDivElement {
+  const picker = document.createElement("div");
+  picker.className = "pane-launcher";
+
+  const header = document.createElement("div");
+  header.className = "pane-picker-header";
+
+  const backBtn = document.createElement("button");
+  backBtn.className = "pane-launcher-button pane-picker-back";
+  backBtn.textContent = "Back";
+  backBtn.addEventListener("click", onBack);
+  header.appendChild(backBtn);
+
+  const titleEl = document.createElement("span");
+  titleEl.className = "pane-picker-title";
+  titleEl.textContent = title;
+  header.appendChild(titleEl);
+
+  picker.appendChild(header);
+
+  const list = document.createElement("div");
+  list.className = "pane-picker-list";
+
+  for (const item of items) {
+    const btn = document.createElement("button");
+    btn.className = "pane-picker-item";
+    btn.dataset["pickerId"] = item.id;
+    const labelSpan = document.createElement("span");
+    labelSpan.className = "pane-picker-item-label";
+    labelSpan.textContent = item.label;
+    btn.appendChild(labelSpan);
+    if (item.detail) {
+      const detailSpan = document.createElement("span");
+      detailSpan.className = "pane-picker-item-detail";
+      detailSpan.textContent = item.detail;
+      btn.appendChild(detailSpan);
+    }
+    btn.addEventListener("click", () => onSelect(item.id));
+    list.appendChild(btn);
+  }
+
+  picker.appendChild(list);
+  return picker;
 }
 
 function createLauncherElement(paneId: string, callbacks: LauncherCallbacks): HTMLDivElement {
@@ -159,7 +214,7 @@ function createLauncherElement(paneId: string, callbacks: LauncherCallbacks): HT
   const actionBtn = document.createElement("button");
   actionBtn.className = "pane-launcher-button";
   actionBtn.textContent = "Trigger action";
-  actionBtn.disabled = true;
+  actionBtn.addEventListener("click", () => callbacks.onActionSelect(paneId));
   launcher.appendChild(actionBtn);
 
   const blankBtn = document.createElement("button");
@@ -369,8 +424,8 @@ export function createPaneManager(options: CreatePaneManagerOptions): PaneManage
   const manualOpts: CloseOptions = { deleteServerSession: true, onPaneClosed: options.onPaneClosed };
 
   const launcherCallbacks: LauncherCallbacks | null =
-    options.onLauncherSelect && options.onClaudeSelect
-      ? { onLauncherSelect: options.onLauncherSelect, onClaudeSelect: options.onClaudeSelect }
+    options.onLauncherSelect && options.onClaudeSelect && options.onActionSelect
+      ? { onLauncherSelect: options.onLauncherSelect, onClaudeSelect: options.onClaudeSelect, onActionSelect: options.onActionSelect }
       : null;
 
   const ctx: PaneContext = {
@@ -389,6 +444,28 @@ export function createPaneManager(options: CreatePaneManagerOptions): PaneManage
     splitHorizontal: () => doSplit(ctx, "horizontal"),
     navigate: (direction) => navigatePane(state, container, direction, launcherCallbacks),
     closePane: (id) => { if (performClose(state, id, manualOpts)) renderState(state, container, launcherCallbacks); },
+    showPickerInPane(paneId: string, title: string, items: PickerItem[], onSelect: (id: string) => void, onBack: () => void) {
+      const leaf = findLeaf(state.root, paneId);
+      if (!leaf) return;
+      if (leaf.launcher) {
+        leaf.launcher.remove();
+      }
+      const picker = createPickerElement(title, items, onSelect, onBack);
+      leaf.launcher = picker;
+      leaf.element.insertBefore(picker, leaf.statusBar);
+    },
+    restoreLauncherInPane(paneId: string) {
+      const leaf = findLeaf(state.root, paneId);
+      if (!leaf) return;
+      if (leaf.launcher) {
+        leaf.launcher.remove();
+      }
+      if (launcherCallbacks) {
+        const launcher = createLauncherElement(paneId, launcherCallbacks);
+        leaf.launcher = launcher;
+        leaf.element.insertBefore(launcher, leaf.statusBar);
+      }
+    },
     activatePane(id: string, connection: TerminalConnection) {
       const leaf = findLeaf(state.root, id);
       if (!leaf) return;

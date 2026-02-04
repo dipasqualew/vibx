@@ -1,5 +1,31 @@
+import { execSync } from "node:child_process";
+import { mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+
 import { test, expect } from "./fixtures.js";
 import type { Page } from "@playwright/test";
+
+const userId = execSync("whoami").toString().trim();
+
+async function seedIssue(dataDir: string, number: number, opts: { title: string; status: string; labels: string[]; body: string }): Promise<void> {
+  const dir = join(dataDir, userId, "issues", String(number));
+  await mkdir(dir, { recursive: true });
+  let fm = "---\n";
+  fm += `title: "${opts.title}"\n`;
+  fm += `status: ${opts.status}\n`;
+  fm += "labels:\n";
+  for (const label of opts.labels) {
+    fm += `  - ${label}\n`;
+  }
+  fm += "---\n";
+  await writeFile(join(dir, "issue.md"), fm + opts.body + "\n");
+}
+
+async function seedHistory(dataDir: string, lines: string): Promise<void> {
+  const dir = join(dataDir, userId, "issues");
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, "history.log"), lines);
+}
 
 function getTerminalBufferContent(page: Page, selector: string) {
   return page.evaluate((sel) => {
@@ -99,12 +125,64 @@ test("start claude code spawns session with configured agent framework", async (
     );
 });
 
-test("trigger action button is disabled", async ({ page }) => {
+test("trigger action button opens issue picker and then action picker", async ({ page, server }) => {
+  // Seed an issue on disk
+  await seedIssue(server.dataDir, 1, { title: "Test issue", status: "todo", labels: [], body: "Issue body" });
+  await seedHistory(server.dataDir, "1 todo\n");
+
+  // Create an action via API
+  await page.evaluate((serverUrl) =>
+    fetch(`${serverUrl}/api/actions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Test Action",
+        scope: "global",
+        steps: [{ type: "run-bash-command", command: "echo action-executed" }],
+      }),
+    }),
+    server.serverUrl,
+  );
+
   await page.goto("/");
 
-  await expect(page.locator(".pane-launcher")).toBeVisible({ timeout: 10_000 });
-  const actionBtn = page.locator(".pane-launcher-button", { hasText: "Trigger action" });
-  await expect(actionBtn).toBeDisabled();
+  // Click trigger action button
+  await clickLauncherButton(page, "Trigger action");
+
+  // Should show issue picker
+  await expect(page.locator(".pane-picker-title")).toHaveText("Select issue", { timeout: 10_000 });
+  await expect(page.locator(".pane-picker-list")).toBeVisible({ timeout: 10_000 });
+
+  // Select the first issue
+  const issueItem = page.locator(".pane-picker-item").first();
+  await expect(issueItem).toBeVisible({ timeout: 10_000 });
+  await issueItem.click();
+
+  // Should show action picker
+  await expect(page.locator(".pane-picker-title")).toHaveText("Select action", { timeout: 10_000 });
+  const actionItem = page.locator(".pane-picker-item", { hasText: "Test Action" });
+  await expect(actionItem).toBeVisible({ timeout: 10_000 });
+  await actionItem.click();
+
+  // Should activate a terminal session
+  const terminal = page.locator(".xterm");
+  await expect(terminal).toBeVisible({ timeout: 10_000 });
+});
+
+test("trigger action picker back button restores launcher", async ({ page }) => {
+  await page.goto("/");
+
+  // Click trigger action button
+  await clickLauncherButton(page, "Trigger action");
+
+  // Should show issue picker
+  await expect(page.locator(".pane-picker-title")).toHaveText("Select issue", { timeout: 10_000 });
+
+  // Click back
+  await page.locator(".pane-picker-back").click();
+
+  // Should restore the launcher
+  await expect(page.locator(".pane-launcher-button", { hasText: "Trigger action" })).toBeVisible({ timeout: 10_000 });
 });
 
 test("new tab via Cmd+T shows launcher", async ({ page }) => {

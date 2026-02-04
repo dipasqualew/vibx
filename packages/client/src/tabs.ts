@@ -1,5 +1,5 @@
-import { createSession, listSessions, listPanes, getPane, updatePane, getSettings } from "./api.js";
-import type { CreateSessionOptions } from "./api.js";
+import { createSession, listSessions, listPanes, getPane, updatePane, getSettings, listIssues, listActions, runAction } from "./api.js";
+import type { CreateSessionOptions, IssueListItem } from "./api.js";
 import { createTerminalConnection } from "./terminal.js";
 import { createPaneManager } from "./panes.js";
 import type { PaneManager } from "./panes.js";
@@ -167,6 +167,7 @@ function addNewTab(
   terminalArea: HTMLDivElement,
   handleLauncherSelect: (tab: Tab, paneId: string) => void,
   handleClaudeSelect: (tab: Tab, paneId: string) => void,
+  handleActionSelect: (tab: Tab, paneId: string) => void,
 ): string {
   state.tabCounter++;
   const id = `tab-${state.tabCounter}`;
@@ -177,6 +178,7 @@ function addNewTab(
     initialConnection: null,
     onLauncherSelect: (paneId) => handleLauncherSelect(tabRef, paneId),
     onClaudeSelect: (paneId) => handleClaudeSelect(tabRef, paneId),
+    onActionSelect: (paneId) => handleActionSelect(tabRef, paneId),
   });
   terminalArea.appendChild(pm.element);
 
@@ -192,6 +194,7 @@ function restoreExistingTab(
   sessionId: string,
   handleLauncherSelect: (tab: Tab, paneId: string) => void,
   handleClaudeSelect: (tab: Tab, paneId: string) => void,
+  handleActionSelect: (tab: Tab, paneId: string) => void,
 ): string {
   state.tabCounter++;
   const id = `tab-${state.tabCounter}`;
@@ -201,6 +204,7 @@ function restoreExistingTab(
     initialConnection: createTerminalConnection(sessionId),
     onLauncherSelect: (paneId) => handleLauncherSelect(tabRef, paneId),
     onClaudeSelect: (paneId) => handleClaudeSelect(tabRef, paneId),
+    onActionSelect: (paneId) => handleActionSelect(tabRef, paneId),
   });
   terminalArea.appendChild(pm.element);
 
@@ -289,9 +293,71 @@ export function createTabManager(container: HTMLElement): TabManager {
     })();
   }
 
+  function handleActionSelect(tab: Tab, paneId: string) {
+    void (async () => {
+      let issues: IssueListItem[];
+      try {
+        issues = await listIssues();
+      } catch {
+        return;
+      }
+
+      const issueItems = issues.map((i) => ({
+        id: i.id,
+        label: `${i.ref}: ${i.title}`,
+        detail: i.status,
+      }));
+
+      tab.paneManager.showPickerInPane(
+        paneId,
+        "Select issue",
+        issueItems,
+        (issueId) => {
+          const issue = issues.find((i) => i.id === issueId);
+          if (!issue) return;
+          void showActionPicker(tab, paneId, issue);
+        },
+        () => tab.paneManager.restoreLauncherInPane(paneId),
+      );
+    })();
+  }
+
+  async function showActionPicker(tab: Tab, paneId: string, issue: IssueListItem) {
+    let actions;
+    try {
+      actions = await listActions();
+    } catch {
+      return;
+    }
+
+    const actionItems = actions.map((a) => ({
+      id: a.id,
+      label: a.name,
+      detail: `${a.steps.length} step${a.steps.length === 1 ? "" : "s"}`,
+    }));
+
+    tab.paneManager.showPickerInPane(
+      paneId,
+      "Select action",
+      actionItems,
+      (actionId) => {
+        void (async () => {
+          try {
+            await runAction(actionId, issue);
+          } catch {
+            // action failed — still show a session
+          }
+          const cwd = await getActiveCwd(state);
+          await activatePaneWithSession(tab, paneId, cwd ? { cwd } : undefined, render);
+        })();
+      },
+      () => void handleActionSelect(tab, paneId),
+    );
+  }
+
   function switchToTab(id: string) { switchTab(state, id); render(); }
   function addTab() {
-    const id = addNewTab(state, dom.terminalArea, handleLauncherSelect, handleClaudeSelect);
+    const id = addNewTab(state, dom.terminalArea, handleLauncherSelect, handleClaudeSelect, handleActionSelect);
     switchToTab(id);
   }
   async function restoreOrAddTab() {
@@ -301,7 +367,7 @@ export function createTabManager(container: HTMLElement): TabManager {
       return;
     }
     for (const session of sessions) {
-      const id = restoreExistingTab(state, dom.terminalArea, session.sessionId, handleLauncherSelect, handleClaudeSelect);
+      const id = restoreExistingTab(state, dom.terminalArea, session.sessionId, handleLauncherSelect, handleClaudeSelect, handleActionSelect);
       switchToTab(id);
     }
   }
