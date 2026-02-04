@@ -16,8 +16,8 @@ interface RouteFixtures {
 }
 
 const test = base.extend<RouteFixtures>({
-  dataDir: async ({}, use) => {
-    const dir = await mkdtemp(join(tmpdir(), "vibx2-actions-routes-test-"));
+  dataDir: async ({ }, use) => {
+    const dir = await mkdtemp(join(tmpdir(), "vibx-actions-routes-test-"));
     await use(dir);
     await rm(dir, { recursive: true, force: true });
   },

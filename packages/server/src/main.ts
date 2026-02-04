@@ -1,8 +1,8 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-import { GitHubIssuesBackend, FileSystemIssuesBackend } from "@vibx2/issues";
-import type { IssuesBackend } from "@vibx2/issues";
+import { GitHubIssuesBackend, FileSystemIssuesBackend } from "@vibx/issues";
+import type { IssuesBackend } from "@vibx/issues";
 
 import { createPtyManager, bunPtyFactory, generateSessionId, createWsServer } from "./index.js";
 import { createActionsStore } from "./actions/store.js";

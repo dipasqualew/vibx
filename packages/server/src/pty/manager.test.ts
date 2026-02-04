@@ -1,6 +1,6 @@
 import { test as base, expect, vi } from "vitest";
 
-import type { PtySessionEvents } from "@vibx2/shared";
+import type { PtySessionEvents } from "@vibx/shared";
 
 import { createPtyManager } from "./manager.js";
 import type { IDisposable, PtyFactory, PtyProcess } from "./types.js";
@@ -42,13 +42,13 @@ interface PtyFixtures {
 }
 
 const test = base.extend<PtyFixtures>({
-  mockProcess: async ({}, use) => {
+  mockProcess: async ({ }, use) => {
     await use(createMockProcess());
   },
   factory: async ({ mockProcess }, use) => {
     await use(() => mockProcess);
   },
-  events: async ({}, use) => {
+  events: async ({ }, use) => {
     await use({
       onData: vi.fn(),
       onExit: vi.fn(),

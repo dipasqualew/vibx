@@ -4,7 +4,7 @@ import type {
   PtySession,
   PtySessionEvents,
   PtySpawnOptions,
-} from "@vibx2/shared";
+} from "@vibx/shared";
 
 import type { InternalPtySession, PtyFactory } from "./types.js";
 

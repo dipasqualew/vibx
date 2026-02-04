@@ -1,9 +1,11 @@
 {
-  "name": "vibx2",
+  "name": "vibx",
   "private": true,
-  "workspaces": ["packages/*"],
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "bun run --filter '@vibx2/server' dev & bun run --filter '@vibx2/client' dev & wait",
+    "dev": "bun run --filter '@vibx/server' dev & bun run --filter '@vibx/client' dev & wait",
     "test": "bun run --filter '*' test",
     "test:repeat": "for i in $(seq 1 ${REPEAT:-5}); do bun run --filter '*' test & done; wait",
     "test:e2e": "playwright test",

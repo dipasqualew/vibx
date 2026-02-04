@@ -161,7 +161,7 @@ import type {
   ActionStepChangeIssueStatus,
   ActionStepRunBashCommand,
   ActionStepSleep,
-} from "@vibx2/shared";
+} from "@vibx/shared";
 
 const actions = ref<Action[]>([]);
 const loading = ref(false);

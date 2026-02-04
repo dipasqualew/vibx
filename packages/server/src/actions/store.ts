@@ -2,7 +2,7 @@ import { join } from "node:path";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 
-import type { Action } from "@vibx2/shared";
+import type { Action } from "@vibx/shared";
 
 export interface ActionsStoreDeps {
   dataDir: string;

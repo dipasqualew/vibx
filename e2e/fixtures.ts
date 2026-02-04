@@ -44,9 +44,9 @@ async function waitForServer(url: string, timeoutMs = 15_000): Promise<void> {
 }
 
 export const test = base.extend<{ server: ServerInfo }>({
-  server: async ({}, use) => {
+  server: async ({ }, use) => {
     const port = await getFreePort();
-    const dataDir = await mkdtemp(join(tmpdir(), "vibx2-test-"));
+    const dataDir = await mkdtemp(join(tmpdir(), "vibx-test-"));
     const serverUrl = `http://localhost:${port}`;
 
     const serverProcess: ChildProcess = spawn("bun", ["run", "src/main.ts"], {

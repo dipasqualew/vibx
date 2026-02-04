@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 
-import type { Action } from "@vibx2/shared";
+import type { Action } from "@vibx/shared";
 
 import { runAction } from "./engine.js";
 import type { ActionEngineDeps } from "./engine.js";

@@ -1,4 +1,4 @@
-import type { PaneStatePatch, PtyManager } from "@vibx2/shared";
+import type { PaneStatePatch, PtyManager } from "@vibx/shared";
 
 export interface PaneRouteDeps {
   ptyManager: PtyManager;

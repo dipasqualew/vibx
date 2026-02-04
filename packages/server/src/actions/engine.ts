@@ -1,6 +1,6 @@
-import type { Action } from "@vibx2/shared";
-import type { PtyManager } from "@vibx2/shared";
-import type { IssuesBackend } from "@vibx2/issues";
+import type { Action } from "@vibx/shared";
+import type { PtyManager } from "@vibx/shared";
+import type { IssuesBackend } from "@vibx/issues";
 
 import { interpolate } from "./interpolate.js";
 import type { IssueContext } from "./interpolate.js";
@@ -16,7 +16,7 @@ function runBashCommand(command: string, ptyManager: PtyManager): Promise<void> 
     ptyManager.create(
       { shell: "bash", args: ["-c", command] },
       {
-        onData: () => {},
+        onData: () => { },
         onExit: (_id, code) => {
           if (code === 0) resolve();
           else reject(new Error(`Command exited with code ${code}`));

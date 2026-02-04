@@ -1,4 +1,4 @@
-import type { UserSettings } from "@vibx2/shared";
+import type { UserSettings } from "@vibx/shared";
 
 import type { SettingsStore } from "./store.js";
 

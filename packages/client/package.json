@@ -1,5 +1,5 @@
 {
-  "name": "@vibx2/client",
+  "name": "@vibx/client",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -9,7 +9,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@vibx2/shared": "workspace:*",
+    "@vibx/shared": "workspace:*",
     "@mdi/font": "^7.4.47",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/addon-webgl": "^0.18.0",

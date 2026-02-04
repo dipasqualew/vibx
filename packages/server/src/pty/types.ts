@@ -29,5 +29,5 @@ export interface InternalPtySession {
   readonly shell: string;
   readonly process: PtyProcess;
   readonly disposables: IDisposable[];
-  readonly paneState: import("@vibx2/shared").PaneState;
+  readonly paneState: import("@vibx/shared").PaneState;
 }

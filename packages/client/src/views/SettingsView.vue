@@ -59,8 +59,8 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, watch } from "vue";
-import type { UserSettings } from "@vibx2/shared";
-import { DEFAULT_USER_SETTINGS } from "@vibx2/shared";
+import type { UserSettings } from "@vibx/shared";
+import { DEFAULT_USER_SETTINGS } from "@vibx/shared";
 import { listGitHubRepositories, apiBase } from "../api";
 
 const form = reactive<UserSettings>({ ...DEFAULT_USER_SETTINGS });

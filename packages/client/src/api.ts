@@ -92,7 +92,7 @@ export async function listGitHubRepositories(): Promise<string[]> {
   return (await res.json()) as string[];
 }
 
-import type { Action, UserSettings } from "@vibx2/shared";
+import type { Action, UserSettings } from "@vibx/shared";
 export type { Action, UserSettings };
 
 export async function listActions(): Promise<Action[]> {

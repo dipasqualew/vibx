@@ -1,8 +1,8 @@
 import { join } from "node:path";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 
-import type { UserSettings } from "@vibx2/shared";
-import { DEFAULT_USER_SETTINGS } from "@vibx2/shared";
+import type { UserSettings } from "@vibx/shared";
+import { DEFAULT_USER_SETTINGS } from "@vibx/shared";
 
 export interface SettingsStoreDeps {
   dataDir: string;

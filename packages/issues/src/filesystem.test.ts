@@ -17,7 +17,7 @@ describe("FileSystemIssuesBackend", () => {
   let backend: FileSystemIssuesBackend;
 
   beforeAll(async () => {
-    baseDir = await mkdtemp(join(tmpdir(), "vibx2-fs-test-"));
+    baseDir = await mkdtemp(join(tmpdir(), "vibx-fs-test-"));
     backend = new FileSystemIssuesBackend(baseDir);
   });
 

@@ -1,5 +1,5 @@
 {
-  "name": "@vibx2/issues",
+  "name": "@vibx/issues",
   "version": "0.0.0",
   "private": true,
   "main": "src/index.ts",

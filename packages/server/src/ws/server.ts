@@ -1,4 +1,4 @@
-import type { PtyManager } from "@vibx2/shared";
+import type { PtyManager } from "@vibx/shared";
 
 import type { ActionsRouteDeps } from "../actions/routes.js";
 import type { ActionsStore } from "../actions/store.js";
@@ -21,7 +21,7 @@ export interface WsServerConfig {
   userId: string;
   settingsStore: SettingsStore;
   actionsStore: ActionsStore;
-  createIssuesBackend: () => Promise<import("@vibx2/issues").IssuesBackend>;
+  createIssuesBackend: () => Promise<import("@vibx/issues").IssuesBackend>;
 }
 
 type PtyWebSocket = Bun.ServerWebSocket<WsConnectionData>;

@@ -1,5 +1,5 @@
-import type { IssuesBackend } from "@vibx2/issues";
-import { listGitHubRepositories } from "@vibx2/issues";
+import type { IssuesBackend } from "@vibx/issues";
+import { listGitHubRepositories } from "@vibx/issues";
 
 export interface IssuesRouteDeps {
   getBackend: () => Promise<IssuesBackend>;

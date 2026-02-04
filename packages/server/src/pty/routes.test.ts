@@ -1,6 +1,6 @@
 import { test as base, expect, vi } from "vitest";
 
-import type { PaneState, PaneStatePatch, PtyManager } from "@vibx2/shared";
+import type { PaneState, PaneStatePatch, PtyManager } from "@vibx/shared";
 
 import { handlePanesRequest } from "./routes.js";
 import type { PaneRouteDeps } from "./routes.js";
@@ -35,7 +35,7 @@ interface Fixtures {
 }
 
 const test = base.extend<Fixtures>({
-  mockManager: async ({}, use) => {
+  mockManager: async ({ }, use) => {
     await use(createMockPtyManager());
   },
   deps: async ({ mockManager }, use) => {

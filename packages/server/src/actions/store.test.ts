@@ -13,8 +13,8 @@ interface StoreFixtures {
 }
 
 const test = base.extend<StoreFixtures>({
-  dataDir: async ({}, use) => {
-    const dir = await mkdtemp(join(tmpdir(), "vibx2-actions-test-"));
+  dataDir: async ({ }, use) => {
+    const dir = await mkdtemp(join(tmpdir(), "vibx-actions-test-"));
     await use(dir);
     await rm(dir, { recursive: true, force: true });
   },

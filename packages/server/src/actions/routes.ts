@@ -1,6 +1,6 @@
-import type { Action } from "@vibx2/shared";
-import type { PtyManager } from "@vibx2/shared";
-import type { IssuesBackend } from "@vibx2/issues";
+import type { Action } from "@vibx/shared";
+import type { PtyManager } from "@vibx/shared";
+import type { IssuesBackend } from "@vibx/issues";
 
 import type { ActionsStore } from "./store.js";
 import { runAction } from "./engine.js";

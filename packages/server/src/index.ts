@@ -1,4 +1,4 @@
-import type { Entity } from "@vibx2/shared";
+import type { Entity } from "@vibx/shared";
 
 export function createEntity(id: string, name: string): Entity {
   return { id, name };

@@ -1,6 +1,6 @@
 import { test as base, expect, vi } from "vitest";
 
-import type { PtyManager, PtySession, PtySessionEvents } from "@vibx2/shared";
+import type { PtyManager, PtySession, PtySessionEvents } from "@vibx/shared";
 
 import { createWsBridge } from "./bridge.js";
 import { createConnectionRegistry } from "./registry.js";
@@ -52,16 +52,16 @@ interface BridgeFixtures {
 }
 
 const test = base.extend<BridgeFixtures>({
-  ptyManager: async ({}, use) => {
+  ptyManager: async ({ }, use) => {
     await use(createMockPtyManager());
   },
-  registry: async ({}, use) => {
+  registry: async ({ }, use) => {
     await use(createConnectionRegistry());
   },
   bridge: async ({ ptyManager, registry }, use) => {
     await use(createWsBridge({ ptyManager, registry }));
   },
-  ws: async ({}, use) => {
+  ws: async ({ }, use) => {
     await use(createMockConnection());
   },
 });

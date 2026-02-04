@@ -3,9 +3,9 @@ import type {
   PtySession,
   PtySpawnOptions,
   WsServerMessage,
-} from "@vibx2/shared";
+} from "@vibx/shared";
 
-import { isWsClientMessage } from "@vibx2/shared";
+import { isWsClientMessage } from "@vibx/shared";
 
 import type { ConnectionRegistry, WsConnection } from "./types.js";
 

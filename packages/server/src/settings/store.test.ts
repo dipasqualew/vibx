@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 
 import { test as base, expect } from "vitest";
-import { DEFAULT_USER_SETTINGS } from "@vibx2/shared";
+import { DEFAULT_USER_SETTINGS } from "@vibx/shared";
 
 import { createSettingsStore } from "./store.js";
 import type { SettingsStore } from "./store.js";
@@ -14,8 +14,8 @@ interface StoreFixtures {
 }
 
 const test = base.extend<StoreFixtures>({
-  dataDir: async ({}, use) => {
-    const dir = await mkdtemp(join(tmpdir(), "vibx2-settings-test-"));
+  dataDir: async ({ }, use) => {
+    const dir = await mkdtemp(join(tmpdir(), "vibx-settings-test-"));
     await use(dir);
     await rm(dir, { recursive: true, force: true });
   },
