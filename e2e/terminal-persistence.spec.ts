@@ -39,13 +39,17 @@ async function waitForPrompt(page: Page, selector: string) {
     .toContain("$");
 }
 
-test("terminal sessions persist across tab navigation", async ({ page }) => {
-  await page.goto("/");
-
-  // Wait for the terminal to be ready
-  const terminal = page.locator(".xterm").first();
+async function launchBlankTerminal(page: Page) {
+  await expect(page.locator(".pane-launcher").first()).toBeVisible({ timeout: 10_000 });
+  await page.locator(".pane-launcher-button", { hasText: "Blank terminal" }).first().click();
+  const terminal = page.locator(".xterm");
   await expect(terminal).toBeVisible({ timeout: 10_000 });
   await waitForPrompt(page, ".terminal-container");
+}
+
+test("terminal sessions persist across tab navigation", async ({ page }) => {
+  await page.goto("/");
+  await launchBlankTerminal(page);
 
   // Set an env var as a marker in the shell session
   const xtermInput = page.locator(".xterm textarea").first();
@@ -89,9 +93,7 @@ test("terminal sessions persist across tab navigation", async ({ page }) => {
 
 test("multiple tabs persist across tab navigation", async ({ page }) => {
   await page.goto("/");
-
-  await expect(page.locator(".xterm").first()).toBeVisible({ timeout: 10_000 });
-  await waitForPrompt(page, ".terminal-container");
+  await launchBlankTerminal(page);
 
   // Set a marker in the first tab
   const tab1Input = page.locator(".xterm textarea").first();
@@ -107,11 +109,17 @@ test("multiple tabs persist across tab navigation", async ({ page }) => {
   await page.keyboard.press("Meta+t");
   await expect(page.locator(".tab")).toHaveCount(2, { timeout: 5_000 });
 
+  // Second tab shows launcher — click blank terminal
+  await expect(page.locator(".pane-launcher")).toBeVisible({ timeout: 5_000 });
+  await page.locator(".pane-launcher-button", { hasText: "Blank terminal" }).click();
+
   // Wait for the second tab's terminal to be ready
+  await expect(page.locator(".terminal-container[data-ws-ready]")).toHaveCount(2, { timeout: 10_000 });
   await waitForPrompt(page, ".terminal-container");
 
   // Set a different marker in the second tab
-  const tab2Input = page.locator(".xterm textarea").first();
+  // Use .last() since the second tab's terminal is appended after the first
+  const tab2Input = page.locator(".xterm textarea").last();
   await tab2Input.pressSequentially("export VIBX_TAB=tab2_marker");
   await tab2Input.press("Enter");
   await expect
@@ -161,9 +169,7 @@ test("multiple tabs persist across tab navigation", async ({ page }) => {
 
 test("terminal sessions persist across page refresh", async ({ page }) => {
   await page.goto("/");
-
-  await expect(page.locator(".xterm").first()).toBeVisible({ timeout: 10_000 });
-  await waitForPrompt(page, ".terminal-container");
+  await launchBlankTerminal(page);
 
   // Set a marker
   const xtermInput = page.locator(".xterm textarea").first();
@@ -179,7 +185,7 @@ test("terminal sessions persist across page refresh", async ({ page }) => {
   // Refresh the page
   await page.reload();
 
-  // Terminal should reappear with restored session
+  // Terminal should reappear with restored session (no launcher since session exists)
   await expect(page.locator(".xterm").first()).toBeVisible({ timeout: 10_000 });
 
   // After reload the xterm buffer is empty because the terminal is recreated.

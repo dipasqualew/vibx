@@ -57,9 +57,9 @@ test("save settings and verify persistence after reload", async ({ page }) => {
 test("navigate between terminal and settings via nav bar", async ({ page }) => {
   await page.goto("/");
 
-  // Terminal should be visible
-  const terminal = page.locator(".xterm").first();
-  await expect(terminal).toBeVisible({ timeout: 10_000 });
+  // Launcher should be visible on initial load
+  const launcher = page.locator(".pane-launcher");
+  await expect(launcher).toBeVisible({ timeout: 10_000 });
 
   // Click Settings in the nav bar
   await page.locator(".v-app-bar").getByText("Settings").click();
@@ -67,14 +67,14 @@ test("navigate between terminal and settings via nav bar", async ({ page }) => {
   // Settings view should load
   await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible({ timeout: 5_000 });
 
-  // Terminal should no longer be visible
-  await expect(terminal).not.toBeVisible();
+  // Launcher should no longer be visible
+  await expect(launcher).not.toBeVisible();
 
   // Click Terminal to go back
   await page.locator(".v-app-bar").getByText("Terminal").click();
 
-  // Terminal should reappear
-  await expect(page.locator(".xterm")).toBeVisible({ timeout: 10_000 });
+  // Launcher should reappear
+  await expect(page.locator(".pane-launcher")).toBeVisible({ timeout: 10_000 });
 });
 
 test("settings API returns updated values", async ({ page, server }) => {

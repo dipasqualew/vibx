@@ -1,4 +1,4 @@
-import { createSession, deleteSession, getPane } from "./api.js";
+import { deleteSession, getPane } from "./api.js";
 import type { PaneStateInfo } from "./api.js";
 import { createTerminalConnection } from "./terminal.js";
 import type { TerminalConnection } from "./terminal.js";
@@ -6,7 +6,8 @@ import type { TerminalConnection } from "./terminal.js";
 interface PaneLeaf {
   type: "leaf";
   id: string;
-  connection: TerminalConnection;
+  connection: TerminalConnection | null;
+  launcher: HTMLDivElement | null;
   element: HTMLDivElement;
   statusBar: HTMLDivElement | null;
 }
@@ -22,19 +23,22 @@ interface PaneSplit {
 type PaneNode = PaneLeaf | PaneSplit;
 
 export interface PaneManager {
-  splitVertical: () => Promise<void>;
-  splitHorizontal: () => Promise<void>;
+  splitVertical: () => void;
+  splitHorizontal: () => void;
   navigate: (direction: "up" | "down" | "left" | "right") => void;
   closePane: (id: string) => void;
-  getActiveConnection: () => TerminalConnection;
+  activatePane: (id: string, connection: TerminalConnection) => void;
+  getActiveConnection: () => TerminalConnection | null;
   dispose: () => void;
   readonly element: HTMLDivElement;
 }
 
 export interface CreatePaneManagerOptions {
-  initialConnection: TerminalConnection;
+  initialConnection: TerminalConnection | null;
   createConnection?: (sessionId: string) => TerminalConnection;
   onPaneClosed?: (sessionId: string) => void;
+  onLauncherSelect?: (paneId: string) => void;
+  onClaudeSelect?: (paneId: string) => void;
 }
 
 let paneIdCounter = 0;
@@ -137,11 +141,48 @@ function renderStatusBar(statusBar: HTMLDivElement, paneState: PaneStateInfo): v
   }
 }
 
-function createLeafElement(leaf: PaneLeaf, isActive: boolean): HTMLDivElement {
+interface LauncherCallbacks {
+  onLauncherSelect: (paneId: string) => void;
+  onClaudeSelect: (paneId: string) => void;
+}
+
+function createLauncherElement(paneId: string, callbacks: LauncherCallbacks): HTMLDivElement {
+  const launcher = document.createElement("div");
+  launcher.className = "pane-launcher";
+
+  const claudeBtn = document.createElement("button");
+  claudeBtn.className = "pane-launcher-button";
+  claudeBtn.textContent = "Start Claude Code";
+  claudeBtn.addEventListener("click", () => callbacks.onClaudeSelect(paneId));
+  launcher.appendChild(claudeBtn);
+
+  const actionBtn = document.createElement("button");
+  actionBtn.className = "pane-launcher-button";
+  actionBtn.textContent = "Trigger action";
+  actionBtn.disabled = true;
+  launcher.appendChild(actionBtn);
+
+  const blankBtn = document.createElement("button");
+  blankBtn.className = "pane-launcher-button";
+  blankBtn.textContent = "Blank terminal";
+  blankBtn.addEventListener("click", () => callbacks.onLauncherSelect(paneId));
+  launcher.appendChild(blankBtn);
+
+  return launcher;
+}
+
+function createLeafElement(leaf: PaneLeaf, isActive: boolean, launcherCallbacks: LauncherCallbacks | null): HTMLDivElement {
   const el = document.createElement("div");
   el.className = "pane-leaf" + (isActive ? "" : " dimmed");
   el.dataset["paneId"] = leaf.id;
-  el.appendChild(leaf.connection.element);
+
+  if (leaf.connection) {
+    el.appendChild(leaf.connection.element);
+  } else if (launcherCallbacks) {
+    const launcher = createLauncherElement(leaf.id, launcherCallbacks);
+    leaf.launcher = launcher;
+    el.appendChild(launcher);
+  }
 
   const statusBar = document.createElement("div");
   statusBar.className = "pane-status-bar";
@@ -152,21 +193,21 @@ function createLeafElement(leaf: PaneLeaf, isActive: boolean): HTMLDivElement {
   return el;
 }
 
-function renderNode(node: PaneNode, activeId: string): HTMLDivElement {
-  if (node.type === "leaf") return createLeafElement(node, node.id === activeId);
+function renderNode(node: PaneNode, activeId: string, launcherCallbacks: LauncherCallbacks | null): HTMLDivElement {
+  if (node.type === "leaf") return createLeafElement(node, node.id === activeId, launcherCallbacks);
 
   const el = document.createElement("div");
   el.className = `pane-split pane-split-${node.direction}`;
   el.dataset["paneId"] = node.id;
   node.element = el;
 
-  el.appendChild(renderNode(node.children[0], activeId));
+  el.appendChild(renderNode(node.children[0], activeId, launcherCallbacks));
 
   const divider = document.createElement("div");
   divider.className = `pane-divider pane-divider-${node.direction}`;
   el.appendChild(divider);
 
-  el.appendChild(renderNode(node.children[1], activeId));
+  el.appendChild(renderNode(node.children[1], activeId, launcherCallbacks));
   return el;
 }
 
@@ -185,24 +226,26 @@ interface PaneState {
   activeId: string;
 }
 
-function renderState(state: PaneState, container: HTMLDivElement) {
+function renderState(state: PaneState, container: HTMLDivElement, launcherCallbacks: LauncherCallbacks | null) {
   container.innerHTML = "";
-  container.appendChild(renderNode(state.root, state.activeId));
+  container.appendChild(renderNode(state.root, state.activeId, launcherCallbacks));
 
   const activeLeaf = findLeaf(state.root, state.activeId);
   if (activeLeaf) {
-    activeLeaf.connection.terminal.focus();
-    if (activeLeaf.statusBar) {
-      void getPane(activeLeaf.connection.sessionId).then((ps) => {
-        if (activeLeaf.statusBar) renderStatusBar(activeLeaf.statusBar, ps);
-      }).catch(() => {});
+    if (activeLeaf.connection) {
+      activeLeaf.connection.terminal.focus();
+      if (activeLeaf.statusBar) {
+        void getPane(activeLeaf.connection.sessionId).then((ps) => {
+          if (activeLeaf.statusBar) renderStatusBar(activeLeaf.statusBar, ps);
+        }).catch(() => {});
+      }
     }
   }
 }
 
 interface SplitParams {
   direction: "horizontal" | "vertical";
-  newConnection: TerminalConnection;
+  newConnection: TerminalConnection | null;
   onExit: (id: string) => void;
 }
 
@@ -216,10 +259,13 @@ function performSplit(state: PaneState, params: SplitParams): string {
     type: "leaf",
     id: newLeafId,
     connection: newConnection,
+    launcher: null,
     element: document.createElement("div"),
     statusBar: null,
   };
-  newConnection.onExit = () => onExit(newLeafId);
+  if (newConnection) {
+    newConnection.onExit = () => onExit(newLeafId);
+  }
 
   const splitNode: PaneSplit = {
     type: "split",
@@ -240,10 +286,12 @@ interface CloseOptions {
 }
 
 function disposeLeaf(leaf: PaneLeaf, opts: CloseOptions): void {
-  const sessionId = leaf.connection.sessionId;
-  leaf.connection.dispose();
-  if (opts.deleteServerSession) void deleteSession(sessionId);
-  opts.onPaneClosed?.(sessionId);
+  if (leaf.connection) {
+    const sessionId = leaf.connection.sessionId;
+    leaf.connection.dispose();
+    if (opts.deleteServerSession) void deleteSession(sessionId);
+    opts.onPaneClosed?.(sessionId);
+  }
 }
 
 function removePaneFromTree(state: PaneState, id: string): boolean {
@@ -272,28 +320,24 @@ interface PaneContext {
   container: HTMLDivElement;
   createConn: (sessionId: string) => TerminalConnection;
   exitOpts: CloseOptions;
+  launcherCallbacks: LauncherCallbacks | null;
 }
 
-async function doSplit(ctx: PaneContext, direction: "horizontal" | "vertical"): Promise<void> {
-  const activeLeaf = findLeaf(ctx.state.root, ctx.state.activeId);
-  const cwd = activeLeaf
-    ? await getPane(activeLeaf.connection.sessionId).then((ps) => ps.cwd).catch(() => undefined)
-    : undefined;
-  const session = await createSession(cwd ? { cwd } : undefined);
+function doSplit(ctx: PaneContext, direction: "horizontal" | "vertical"): void {
   performSplit(ctx.state, {
     direction,
-    newConnection: ctx.createConn(session.sessionId),
+    newConnection: null,
     onExit: (id: string) => {
-      if (performClose(ctx.state, id, ctx.exitOpts)) renderState(ctx.state, ctx.container);
+      if (performClose(ctx.state, id, ctx.exitOpts)) renderState(ctx.state, ctx.container, ctx.launcherCallbacks);
     },
   });
-  renderState(ctx.state, ctx.container);
+  renderState(ctx.state, ctx.container, ctx.launcherCallbacks);
 }
 
-function initPaneState(connection: TerminalConnection): { state: PaneState; initialId: string } {
+function initPaneState(connection: TerminalConnection | null): { state: PaneState; initialId: string } {
   const initialId = nextPaneId();
   const state: PaneState = {
-    root: { type: "leaf", id: initialId, connection, element: document.createElement("div"), statusBar: null },
+    root: { type: "leaf", id: initialId, connection, launcher: null, element: document.createElement("div"), statusBar: null },
     activeId: initialId,
   };
   return { state, initialId };
@@ -301,17 +345,19 @@ function initPaneState(connection: TerminalConnection): { state: PaneState; init
 
 function disposeAllPanes(state: PaneState, container: HTMLDivElement): void {
   for (const leaf of allLeaves(state.root)) {
-    leaf.connection.dispose();
-    void deleteSession(leaf.connection.sessionId);
+    if (leaf.connection) {
+      leaf.connection.dispose();
+      void deleteSession(leaf.connection.sessionId);
+    }
   }
   container.remove();
 }
 
-function navigatePane(state: PaneState, container: HTMLDivElement, direction: "up" | "down" | "left" | "right"): void {
+function navigatePane(state: PaneState, container: HTMLDivElement, direction: "up" | "down" | "left" | "right", launcherCallbacks: LauncherCallbacks | null): void {
   const target = findNavigationTarget(state.root, state.activeId, direction);
   if (!target) return;
   state.activeId = target.id;
-  renderState(state, container);
+  renderState(state, container, launcherCallbacks);
 }
 
 export function createPaneManager(options: CreatePaneManagerOptions): PaneManager {
@@ -321,23 +367,44 @@ export function createPaneManager(options: CreatePaneManagerOptions): PaneManage
   const { state, initialId } = initPaneState(options.initialConnection);
   const exitOpts: CloseOptions = { deleteServerSession: false, onPaneClosed: options.onPaneClosed };
   const manualOpts: CloseOptions = { deleteServerSession: true, onPaneClosed: options.onPaneClosed };
+
+  const launcherCallbacks: LauncherCallbacks | null =
+    options.onLauncherSelect && options.onClaudeSelect
+      ? { onLauncherSelect: options.onLauncherSelect, onClaudeSelect: options.onClaudeSelect }
+      : null;
+
   const ctx: PaneContext = {
-    state, container, createConn: options.createConnection ?? createTerminalConnection, exitOpts,
+    state, container, createConn: options.createConnection ?? createTerminalConnection, exitOpts, launcherCallbacks,
   };
 
-  options.initialConnection.onExit = () => {
-    if (performClose(state, initialId, exitOpts)) renderState(state, container);
-  };
-  renderState(state, container);
+  if (options.initialConnection) {
+    options.initialConnection.onExit = () => {
+      if (performClose(state, initialId, exitOpts)) renderState(state, container, launcherCallbacks);
+    };
+  }
+  renderState(state, container, launcherCallbacks);
 
   return {
     splitVertical: () => doSplit(ctx, "vertical"),
     splitHorizontal: () => doSplit(ctx, "horizontal"),
-    navigate: (direction) => navigatePane(state, container, direction),
-    closePane: (id) => { if (performClose(state, id, manualOpts)) renderState(state, container); },
+    navigate: (direction) => navigatePane(state, container, direction, launcherCallbacks),
+    closePane: (id) => { if (performClose(state, id, manualOpts)) renderState(state, container, launcherCallbacks); },
+    activatePane(id: string, connection: TerminalConnection) {
+      const leaf = findLeaf(state.root, id);
+      if (!leaf) return;
+      if (leaf.launcher) {
+        leaf.launcher.remove();
+        leaf.launcher = null;
+      }
+      leaf.connection = connection;
+      connection.onExit = () => {
+        if (performClose(state, id, exitOpts)) renderState(state, container, launcherCallbacks);
+      };
+      renderState(state, container, launcherCallbacks);
+    },
     getActiveConnection() {
       const leaf = findLeaf(state.root, state.activeId);
-      if (!leaf) throw new Error("No active pane");
+      if (!leaf) return null;
       return leaf.connection;
     },
     dispose: () => disposeAllPanes(state, container),

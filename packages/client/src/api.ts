@@ -92,8 +92,8 @@ export async function listGitHubRepositories(): Promise<string[]> {
   return (await res.json()) as string[];
 }
 
-import type { Action } from "@vibx2/shared";
-export type { Action };
+import type { Action, UserSettings } from "@vibx2/shared";
+export type { Action, UserSettings };
 
 export async function listActions(): Promise<Action[]> {
   const res = await fetch(`${apiBase()}/api/actions`);
@@ -124,4 +124,10 @@ export async function updateAction(id: string, patch: Partial<Omit<Action, "id">
 export async function deleteAction(id: string): Promise<void> {
   const res = await fetch(`${apiBase()}/api/actions/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error(`Failed to delete action: ${res.status}`);
+}
+
+export async function getSettings(): Promise<UserSettings> {
+  const res = await fetch(`${apiBase()}/api/settings`);
+  if (!res.ok) throw new Error(`Failed to get settings: ${res.status}`);
+  return (await res.json()) as UserSettings;
 }

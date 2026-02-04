@@ -1,11 +1,12 @@
-import { createSession, listSessions, listPanes, getPane, updatePane } from "./api.js";
+import { createSession, listSessions, listPanes, getPane, updatePane, getSettings } from "./api.js";
+import type { CreateSessionOptions } from "./api.js";
 import { createTerminalConnection } from "./terminal.js";
 import { createPaneManager } from "./panes.js";
 import type { PaneManager } from "./panes.js";
 
 interface Tab {
   id: string;
-  sessionId: string;
+  sessionId: string | null;
   label: string;
   bell: boolean;
   paneManager: PaneManager;
@@ -13,14 +14,14 @@ interface Tab {
 }
 
 export interface TabManager {
-  addTab: () => Promise<void>;
+  addTab: () => void;
   restoreOrAddTab: () => Promise<void>;
   closeTab: (id: string) => void;
   switchToTab: (id: string) => void;
   nextTab: () => void;
   prevTab: () => void;
-  splitVertical: () => Promise<void>;
-  splitHorizontal: () => Promise<void>;
+  splitVertical: () => void;
+  splitHorizontal: () => void;
   navigate: (direction: "up" | "down" | "left" | "right") => void;
 }
 
@@ -86,8 +87,11 @@ function switchTab(state: TabState, id: string): void {
     const isActive = tab.id === id;
     tab.paneManager.element.style.display = isActive ? "flex" : "none";
     if (isActive) {
-      tab.paneManager.getActiveConnection().terminal.focus();
-      if (tab.bell) {
+      const conn = tab.paneManager.getActiveConnection();
+      if (conn) {
+        conn.terminal.focus();
+      }
+      if (tab.bell && tab.sessionId) {
         tab.bell = false;
         void updatePane(tab.sessionId, { bell: false });
       }
@@ -129,23 +133,80 @@ async function fetchTabLabel(sessionId: string, fallback: string): Promise<strin
   }
 }
 
-async function addNewTab(state: TabState, terminalArea: HTMLDivElement): Promise<string> {
+async function getActiveCwd(state: TabState): Promise<string | undefined> {
+  const activeTab = state.tabs.find((t) => t.id === state.activeTabId);
+  if (!activeTab) return undefined;
+  const conn = activeTab.paneManager.getActiveConnection();
+  if (!conn) return undefined;
+  try {
+    const ps = await getPane(conn.sessionId);
+    return ps.cwd;
+  } catch {
+    return undefined;
+  }
+}
+
+async function activatePaneWithSession(
+  tab: Tab,
+  paneId: string,
+  sessionOpts: CreateSessionOptions | undefined,
+  render: () => void,
+): Promise<void> {
+  const session = await createSession(sessionOpts);
+  const conn = createTerminalConnection(session.sessionId);
+  tab.paneManager.activatePane(paneId, conn);
+  if (!tab.sessionId) {
+    tab.sessionId = session.sessionId;
+    tab.label = await fetchTabLabel(session.sessionId, tab.label);
+    render();
+  }
+}
+
+function addNewTab(
+  state: TabState,
+  terminalArea: HTMLDivElement,
+  handleLauncherSelect: (tab: Tab, paneId: string) => void,
+  handleClaudeSelect: (tab: Tab, paneId: string) => void,
+): string {
   state.tabCounter++;
-  const session = await createSession();
-  const pm = createPaneManager({ initialConnection: createTerminalConnection(session.sessionId) });
-  terminalArea.appendChild(pm.element);
   const id = `tab-${state.tabCounter}`;
-  const label = await fetchTabLabel(session.sessionId, `Terminal ${state.tabCounter}`);
-  state.tabs.push({ id, sessionId: session.sessionId, label, bell: false, paneManager: pm, tabElement: document.createElement("div") });
+  const label = `Terminal ${state.tabCounter}`;
+
+  let tabRef: Tab;
+  const pm = createPaneManager({
+    initialConnection: null,
+    onLauncherSelect: (paneId) => handleLauncherSelect(tabRef, paneId),
+    onClaudeSelect: (paneId) => handleClaudeSelect(tabRef, paneId),
+  });
+  terminalArea.appendChild(pm.element);
+
+  const tab: Tab = { id, sessionId: null, label, bell: false, paneManager: pm, tabElement: document.createElement("div") };
+  tabRef = tab;
+  state.tabs.push(tab);
   return id;
 }
 
-function restoreExistingTab(state: TabState, terminalArea: HTMLDivElement, sessionId: string): string {
+function restoreExistingTab(
+  state: TabState,
+  terminalArea: HTMLDivElement,
+  sessionId: string,
+  handleLauncherSelect: (tab: Tab, paneId: string) => void,
+  handleClaudeSelect: (tab: Tab, paneId: string) => void,
+): string {
   state.tabCounter++;
-  const pm = createPaneManager({ initialConnection: createTerminalConnection(sessionId) });
-  terminalArea.appendChild(pm.element);
   const id = `tab-${state.tabCounter}`;
-  state.tabs.push({ id, sessionId, label: `Terminal ${state.tabCounter}`, bell: false, paneManager: pm, tabElement: document.createElement("div") });
+
+  let tabRef: Tab;
+  const pm = createPaneManager({
+    initialConnection: createTerminalConnection(sessionId),
+    onLauncherSelect: (paneId) => handleLauncherSelect(tabRef, paneId),
+    onClaudeSelect: (paneId) => handleClaudeSelect(tabRef, paneId),
+  });
+  terminalArea.appendChild(pm.element);
+
+  const tab: Tab = { id, sessionId, label: `Terminal ${state.tabCounter}`, bell: false, paneManager: pm, tabElement: document.createElement("div") };
+  tabRef = tab;
+  state.tabs.push(tab);
   return id;
 }
 
@@ -176,6 +237,7 @@ async function pollPaneStates(state: TabState, render: () => void): Promise<void
     let changed = false;
 
     for (const tab of state.tabs) {
+      if (!tab.sessionId) continue;
       const ps = stateMap.get(tab.sessionId);
       if (!ps) continue;
 
@@ -197,22 +259,49 @@ async function pollPaneStates(state: TabState, render: () => void): Promise<void
 
 export function createTabManager(container: HTMLElement): TabManager {
   const state: TabState = { tabs: [], activeTabId: null, tabCounter: 0 };
-  const dom = createTabDom(container, () => void addTab());
+  const dom = createTabDom(container, () => addTab());
   const cbs: TabCallbacks = { onSwitch: (id) => switchToTab(id), onClose: (id) => closeTab(id) };
   const render = () => renderAllTabs(state, dom, cbs);
 
   setInterval(() => void pollPaneStates(state, render), PANE_POLL_INTERVAL_MS);
 
+  function handleLauncherSelect(tab: Tab, paneId: string) {
+    void (async () => {
+      const cwd = await getActiveCwd(state);
+      await activatePaneWithSession(tab, paneId, cwd ? { cwd } : undefined, render);
+    })();
+  }
+
+  function handleClaudeSelect(tab: Tab, paneId: string) {
+    void (async () => {
+      const cwd = await getActiveCwd(state);
+      let shell: string | undefined;
+      try {
+        const settings = await getSettings();
+        shell = settings.default_agent_framework;
+      } catch {
+        // fall back to default
+      }
+      const opts: CreateSessionOptions = {};
+      if (shell) opts.shell = shell;
+      if (cwd) opts.cwd = cwd;
+      await activatePaneWithSession(tab, paneId, Object.keys(opts).length > 0 ? opts : undefined, render);
+    })();
+  }
+
   function switchToTab(id: string) { switchTab(state, id); render(); }
-  async function addTab() { switchToTab(await addNewTab(state, dom.terminalArea)); }
+  function addTab() {
+    const id = addNewTab(state, dom.terminalArea, handleLauncherSelect, handleClaudeSelect);
+    switchToTab(id);
+  }
   async function restoreOrAddTab() {
     const sessions = await listSessions();
     if (sessions.length === 0) {
-      await addTab();
+      addTab();
       return;
     }
     for (const session of sessions) {
-      const id = restoreExistingTab(state, dom.terminalArea, session.sessionId);
+      const id = restoreExistingTab(state, dom.terminalArea, session.sessionId, handleLauncherSelect, handleClaudeSelect);
       switchToTab(id);
     }
   }
@@ -223,8 +312,8 @@ export function createTabManager(container: HTMLElement): TabManager {
     addTab, restoreOrAddTab, closeTab, switchToTab,
     nextTab: () => { const id = cycleTab(state, 1); if (id) switchToTab(id); },
     prevTab: () => { const id = cycleTab(state, -1); if (id) switchToTab(id); },
-    async splitVertical() { const t = getActive(); if (t) await t.paneManager.splitVertical(); },
-    async splitHorizontal() { const t = getActive(); if (t) await t.paneManager.splitHorizontal(); },
+    splitVertical() { const t = getActive(); if (t) t.paneManager.splitVertical(); },
+    splitHorizontal() { const t = getActive(); if (t) t.paneManager.splitHorizontal(); },
     navigate(direction) { getActive()?.paneManager.navigate(direction); },
   };
 }

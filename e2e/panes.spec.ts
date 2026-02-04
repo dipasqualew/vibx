@@ -26,25 +26,32 @@ function getTerminalBufferContent(page: Page, selector: string) {
   }, selector);
 }
 
-async function waitForPrompt(page: Page, selector: string) {
+async function waitForPrompt(page: Page, selector: string, timeout = 15_000) {
   // Wait for the WebSocket connection to be established before polling the buffer
   await expect(page.locator(`${selector}[data-ws-ready]`).first()).toBeAttached({
-    timeout: 10_000,
+    timeout,
   });
   await expect
     .poll(() => getTerminalBufferContent(page, selector), {
-      timeout: 10_000,
+      timeout,
       message: `waiting for shell prompt in ${selector}`,
     })
     .toContain("$");
 }
 
+async function launchBlankTerminal(page: Page) {
+  await expect(page.locator(".pane-launcher").first()).toBeVisible({ timeout: 10_000 });
+  await page.locator(".pane-launcher-button", { hasText: "Blank terminal" }).first().click();
+  const terminal = page.locator(".xterm");
+  await expect(terminal.first()).toBeVisible({ timeout: 10_000 });
+  // Wait for the WS handshake before polling buffer content
+  await expect(page.locator(".terminal-container[data-ws-ready]").first()).toBeAttached({ timeout: 10_000 });
+  await waitForPrompt(page, ".terminal-container");
+}
+
 test("split vertical creates two side-by-side panes", async ({ page }) => {
   await page.goto("/");
-
-  const terminal = page.locator(".xterm");
-  await expect(terminal).toBeVisible({ timeout: 10_000 });
-  await waitForPrompt(page, ".terminal-container");
+  await launchBlankTerminal(page);
 
   // Split vertically with Cmd+D
   await page.keyboard.press("Meta+d");
@@ -58,10 +65,7 @@ test("split vertical creates two side-by-side panes", async ({ page }) => {
 
 test("split horizontal creates two stacked panes", async ({ page }) => {
   await page.goto("/");
-
-  const terminal = page.locator(".xterm");
-  await expect(terminal).toBeVisible({ timeout: 10_000 });
-  await waitForPrompt(page, ".terminal-container");
+  await launchBlankTerminal(page);
 
   // Split horizontally with Shift+Cmd+D
   await page.keyboard.press("Shift+Meta+d");
@@ -72,14 +76,15 @@ test("split horizontal creates two stacked panes", async ({ page }) => {
 
 test("navigate between panes with arrow keys", async ({ page }) => {
   await page.goto("/");
+  await launchBlankTerminal(page);
 
-  const terminal = page.locator(".xterm");
-  await expect(terminal).toBeVisible({ timeout: 10_000 });
-  await waitForPrompt(page, ".terminal-container");
-
-  // Split vertically — focus moves to right pane
+  // Split vertically — new pane shows launcher
   await page.keyboard.press("Meta+d");
   await expect(page.locator(".pane-leaf")).toHaveCount(2, { timeout: 5_000 });
+
+  // Activate the new pane with Blank terminal
+  await expect(page.locator(".pane-launcher")).toBeVisible({ timeout: 5_000 });
+  await page.locator(".pane-launcher-button", { hasText: "Blank terminal" }).click();
 
   // Wait for the new pane's shell prompt
   const paneLeaves = page.locator(".pane-leaf");
@@ -95,30 +100,32 @@ test("navigate between panes with arrow keys", async ({ page }) => {
 
 test("three panes after vertical then horizontal split", async ({ page }) => {
   await page.goto("/");
-
-  const terminal = page.locator(".xterm");
-  await expect(terminal).toBeVisible({ timeout: 10_000 });
-  await waitForPrompt(page, ".terminal-container");
+  await launchBlankTerminal(page);
 
   // Split vertically
   await page.keyboard.press("Meta+d");
   await expect(page.locator(".pane-leaf")).toHaveCount(2, { timeout: 5_000 });
 
-  // Split horizontally on the right pane
+  // Activate new pane then split horizontally
+  await expect(page.locator(".pane-launcher")).toBeVisible({ timeout: 5_000 });
+  await page.locator(".pane-launcher-button", { hasText: "Blank terminal" }).click();
+  await waitForPrompt(page, ".pane-leaf:not(.dimmed) .terminal-container");
+
   await page.keyboard.press("Shift+Meta+d");
   await expect(page.locator(".pane-leaf")).toHaveCount(3, { timeout: 5_000 });
 });
 
 test("closing a pane via exit recomputes layout", async ({ page }) => {
   await page.goto("/");
-
-  const terminal = page.locator(".xterm");
-  await expect(terminal).toBeVisible({ timeout: 10_000 });
-  await waitForPrompt(page, ".terminal-container");
+  await launchBlankTerminal(page);
 
   // Split vertically
   await page.keyboard.press("Meta+d");
   await expect(page.locator(".pane-leaf")).toHaveCount(2, { timeout: 5_000 });
+
+  // Activate the new pane
+  await expect(page.locator(".pane-launcher")).toBeVisible({ timeout: 5_000 });
+  await page.locator(".pane-launcher-button", { hasText: "Blank terminal" }).click();
 
   // Wait for prompt in the new (active/right) pane
   const activePaneLeaf = page.locator(".pane-leaf:not(.dimmed)");
@@ -140,27 +147,29 @@ test("closing a pane via exit recomputes layout", async ({ page }) => {
 
 test("closing panes until one remains fills the space", async ({ page }) => {
   await page.goto("/");
+  await launchBlankTerminal(page);
 
-  const terminal = page.locator(".xterm");
-  await expect(terminal).toBeVisible({ timeout: 10_000 });
-  await waitForPrompt(page, ".terminal-container");
-
-  // Split twice
+  // Split twice, activating each new pane
   await page.keyboard.press("Meta+d");
   await expect(page.locator(".pane-leaf")).toHaveCount(2, { timeout: 5_000 });
+  await expect(page.locator(".pane-launcher")).toBeVisible({ timeout: 5_000 });
+  await page.locator(".pane-launcher-button", { hasText: "Blank terminal" }).click();
+  await waitForPrompt(page, ".pane-leaf:not(.dimmed) .terminal-container");
 
   await page.keyboard.press("Meta+d");
   await expect(page.locator(".pane-leaf")).toHaveCount(3, { timeout: 5_000 });
-
-  // Close active pane (rightmost) — wait for its shell to be ready first
-  let activePaneLeaf = page.locator(".pane-leaf:not(.dimmed)");
+  await expect(page.locator(".pane-launcher")).toBeVisible({ timeout: 5_000 });
+  await page.locator(".pane-launcher-button", { hasText: "Blank terminal" }).click();
   await waitForPrompt(page, ".pane-leaf:not(.dimmed) .terminal-container");
+
+  // Close active pane (rightmost)
+  let activePaneLeaf = page.locator(".pane-leaf:not(.dimmed)");
   let xtermInput = activePaneLeaf.locator(".xterm textarea");
   await xtermInput.pressSequentially("exit");
   await xtermInput.press("Enter");
   await expect(page.locator(".pane-leaf")).toHaveCount(2, { timeout: 10_000 });
 
-  // Close next active pane — wait for its shell to be ready first
+  // Close next active pane
   activePaneLeaf = page.locator(".pane-leaf:not(.dimmed)");
   await waitForPrompt(page, ".pane-leaf:not(.dimmed) .terminal-container");
   xtermInput = activePaneLeaf.locator(".xterm textarea");

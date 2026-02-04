@@ -3,8 +3,8 @@ import { test, expect } from "./fixtures.js";
 test("navigate to actions via nav bar", async ({ page }) => {
   await page.goto("/");
 
-  // Terminal should be visible
-  await expect(page.locator(".xterm")).toBeVisible({ timeout: 10_000 });
+  // Launcher should be visible on initial load
+  await expect(page.locator(".pane-launcher")).toBeVisible({ timeout: 10_000 });
 
   // Click Actions in the nav bar
   await page.locator(".v-app-bar").getByText("Actions").click();
@@ -12,8 +12,8 @@ test("navigate to actions via nav bar", async ({ page }) => {
   // Actions view should load
   await expect(page.getByRole("heading", { name: "Actions" })).toBeVisible({ timeout: 5_000 });
 
-  // Terminal should no longer be visible
-  await expect(page.locator(".xterm")).not.toBeVisible();
+  // Launcher should no longer be visible
+  await expect(page.locator(".pane-launcher")).not.toBeVisible();
 });
 
 test("actions page shows empty state when no actions exist", async ({ page }) => {

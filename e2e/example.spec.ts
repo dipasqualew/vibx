@@ -3,6 +3,10 @@ import { test, expect } from "./fixtures.js";
 test("terminal session runs echo Hello World", async ({ page }) => {
   await page.goto("/");
 
+  // Wait for the launcher to appear and click "Blank terminal"
+  await expect(page.locator(".pane-launcher")).toBeVisible({ timeout: 10_000 });
+  await page.locator(".pane-launcher-button", { hasText: "Blank terminal" }).click();
+
   // Wait for xterm.js terminal to render
   const terminal = page.locator(".xterm");
   await expect(terminal).toBeVisible({ timeout: 10_000 });
