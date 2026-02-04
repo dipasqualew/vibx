@@ -275,7 +275,11 @@ interface PaneContext {
 }
 
 async function doSplit(ctx: PaneContext, direction: "horizontal" | "vertical"): Promise<void> {
-  const session = await createSession();
+  const activeLeaf = findLeaf(ctx.state.root, ctx.state.activeId);
+  const cwd = activeLeaf
+    ? await getPane(activeLeaf.connection.sessionId).then((ps) => ps.cwd).catch(() => undefined)
+    : undefined;
+  const session = await createSession(cwd ? { cwd } : undefined);
   performSplit(ctx.state, {
     direction,
     newConnection: ctx.createConn(session.sessionId),

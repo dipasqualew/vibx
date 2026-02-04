@@ -12,6 +12,7 @@ export interface CreateSessionOptions {
   shell?: string;
   cols?: number;
   rows?: number;
+  cwd?: string;
 }
 
 export async function createSession(options?: CreateSessionOptions): Promise<SessionInfo> {

@@ -200,6 +200,22 @@ test("attachSession does not set bell for data without bell char", ({ bridge, pt
   expect(ptyManager.updatePaneState).not.toHaveBeenCalled();
 });
 
+test("createSession passes cwd through to ptyManager.create", ({ bridge, ptyManager }) => {
+  bridge.createSession({ cwd: "/some/path" });
+
+  expect(ptyManager.create).toHaveBeenCalledWith(
+    expect.objectContaining({ cwd: "/some/path" }),
+    expect.any(Object),
+  );
+});
+
+test("createSession omits cwd when not provided", ({ bridge, ptyManager }) => {
+  bridge.createSession({ shell: "/bin/bash" });
+
+  const spawnOptions = (ptyManager.create as ReturnType<typeof vi.fn>).mock.calls[0]![0];
+  expect(spawnOptions).not.toHaveProperty("cwd");
+});
+
 test("createSession detects bell character in data", ({ bridge, ptyManager, registry }) => {
   bridge.createSession({ shell: "/bin/bash" });
   const ws = createMockConnection();

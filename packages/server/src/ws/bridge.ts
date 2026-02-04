@@ -18,6 +18,7 @@ export interface CreateSessionOptions {
   shell?: string;
   cols?: number;
   rows?: number;
+  cwd?: string;
 }
 
 export interface WsBridge {
@@ -113,7 +114,7 @@ function attachSession(
   });
 }
 
-const SESSION_DEFAULTS: Required<CreateSessionOptions> = {
+const SESSION_DEFAULTS: Required<Pick<CreateSessionOptions, "shell" | "cols" | "rows">> = {
   shell: process.env["SHELL"] || "bash",
   cols: 80,
   rows: 24,
@@ -121,7 +122,9 @@ const SESSION_DEFAULTS: Required<CreateSessionOptions> = {
 
 function resolveSpawnOptions(options?: CreateSessionOptions): PtySpawnOptions {
   const resolved = { ...SESSION_DEFAULTS, ...options };
-  return { shell: resolved.shell, size: { cols: resolved.cols, rows: resolved.rows } };
+  const spawn: PtySpawnOptions = { shell: resolved.shell, size: { cols: resolved.cols, rows: resolved.rows } };
+  if (resolved.cwd) spawn.cwd = resolved.cwd;
+  return spawn;
 }
 
 function createSessionWithDefaults(

@@ -88,7 +88,7 @@ export function createTerminalConnection(sessionId: string): TerminalConnection 
 
   ws.addEventListener("message", (event: MessageEvent) => {
     const msg = JSON.parse(event.data as string) as ServerMessage;
-    if (msg.type === "output" && !element.dataset["wsReady"]) {
+    if (msg.type === "session_info" && !element.dataset["wsReady"]) {
       element.dataset["wsReady"] = "true";
     }
     handleServerMessage(msg, terminal, connection);
