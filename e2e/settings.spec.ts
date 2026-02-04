@@ -1,27 +1,4 @@
-import { test, expect } from "@playwright/test";
-
-const DEFAULT_SETTINGS = {
-  issue_provider: "github",
-  issue_provider__github__github_token: "",
-  default_agent_framework: "claude",
-};
-
-// Settings tests share a single file on disk, so they must run serially
-test.describe.configure({ mode: "serial" });
-
-// Reset settings to defaults before each test to avoid cross-test pollution
-test.beforeEach(async ({ page }) => {
-  await page.goto("/settings");
-  await page.evaluate(
-    (defaults) =>
-      fetch("/api/settings", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(defaults),
-      }),
-    DEFAULT_SETTINGS,
-  );
-});
+import { test, expect } from "./fixtures.js";
 
 test("settings page loads with default values", async ({ page }) => {
   await page.goto("/settings");
@@ -81,7 +58,7 @@ test("navigate between terminal and settings via nav bar", async ({ page }) => {
   await page.goto("/");
 
   // Terminal should be visible
-  const terminal = page.locator(".xterm");
+  const terminal = page.locator(".xterm").first();
   await expect(terminal).toBeVisible({ timeout: 10_000 });
 
   // Click Settings in the nav bar
@@ -100,24 +77,26 @@ test("navigate between terminal and settings via nav bar", async ({ page }) => {
   await expect(page.locator(".xterm")).toBeVisible({ timeout: 10_000 });
 });
 
-test("settings API returns updated values", async ({ page }) => {
+test("settings API returns updated values", async ({ page, server }) => {
   await page.goto("/settings");
   await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible({ timeout: 10_000 });
 
   // Use the API directly to PUT settings
-  const putResponse = await page.evaluate(() =>
-    fetch("/api/settings", {
+  const putResponse = await page.evaluate((serverUrl) =>
+    fetch(`${serverUrl}/api/settings`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ default_agent_framework: "mock-code" }),
     }).then((r) => r.json()),
+    server.serverUrl,
   );
   expect(putResponse).toHaveProperty("default_agent_framework", "mock-code");
   expect(putResponse).toHaveProperty("issue_provider", "github");
 
   // GET should return the same
-  const getResponse = await page.evaluate(() =>
-    fetch("/api/settings").then((r) => r.json()),
+  const getResponse = await page.evaluate((serverUrl) =>
+    fetch(`${serverUrl}/api/settings`).then((r) => r.json()),
+    server.serverUrl,
   );
   expect(getResponse).toHaveProperty("default_agent_framework", "mock-code");
 });

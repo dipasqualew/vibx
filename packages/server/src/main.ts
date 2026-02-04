@@ -9,7 +9,7 @@ import { createSettingsStore } from "./settings/store.js";
 const PORT = Number(process.env["PORT"] ?? 3000);
 
 const userId = (await Bun.$`whoami`.text()).trim();
-const dataDir = join(process.cwd(), ".vibx2-data");
+const dataDir = process.env["VIBX_DATA_DIR"] ?? join(process.cwd(), ".vibx2-data");
 
 const ptyManager = createPtyManager({
   factory: bunPtyFactory,

@@ -56,7 +56,7 @@ function handleKeydown(e: KeyboardEvent) {
 onMounted(() => {
   if (!terminalRoot.value) return;
   tabManager = createTabManager(terminalRoot.value);
-  void tabManager.addTab();
+  void tabManager.restoreOrAddTab();
   document.addEventListener("keydown", handleKeydown);
 });
 

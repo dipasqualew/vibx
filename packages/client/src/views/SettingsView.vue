@@ -61,7 +61,7 @@
 import { ref, reactive, onMounted, watch } from "vue";
 import type { UserSettings } from "@vibx2/shared";
 import { DEFAULT_USER_SETTINGS } from "@vibx2/shared";
-import { listGitHubRepositories } from "../api";
+import { listGitHubRepositories, apiBase } from "../api";
 
 const form = reactive<UserSettings>({ ...DEFAULT_USER_SETTINGS });
 const loading = ref(false);
@@ -72,7 +72,7 @@ const saved = ref(false);
 
 async function loadSettings() {
   try {
-    const res = await fetch("/api/settings");
+    const res = await fetch(`${apiBase()}/api/settings`);
     if (!res.ok) throw new Error(`Failed to load settings: ${res.status}`);
     const data = (await res.json()) as UserSettings;
     Object.assign(form, data);
@@ -86,7 +86,7 @@ async function save() {
   saved.value = false;
   error.value = "";
   try {
-    const res = await fetch("/api/settings", {
+    const res = await fetch(`${apiBase()}/api/settings`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(form),

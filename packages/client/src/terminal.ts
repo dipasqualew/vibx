@@ -73,8 +73,16 @@ export function createTerminalConnection(sessionId: string): TerminalConnection 
   tryLoadWebgl(terminal);
   fitAddon.fit();
 
-  const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-  const ws = new WebSocket(`${protocol}//${location.host}/ws/pty/${sessionId}`);
+  let wsBase: string;
+  if (window.__VIBX_SERVER_URL) {
+    const url = new URL(window.__VIBX_SERVER_URL);
+    const wsProtocol = url.protocol === "https:" ? "wss:" : "ws:";
+    wsBase = `${wsProtocol}//${url.host}`;
+  } else {
+    const wsProtocol = location.protocol === "https:" ? "wss:" : "ws:";
+    wsBase = `${wsProtocol}//${location.host}`;
+  }
+  const ws = new WebSocket(`${wsBase}/ws/pty/${sessionId}`);
 
   const connection: TerminalConnection = { sessionId, terminal, element, onExit: null, dispose };
 

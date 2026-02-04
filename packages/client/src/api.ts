@@ -1,3 +1,7 @@
+export function apiBase(): string {
+  return window.__VIBX_SERVER_URL ?? "";
+}
+
 export interface SessionInfo {
   sessionId: string;
   shell: string;
@@ -11,7 +15,7 @@ export interface CreateSessionOptions {
 }
 
 export async function createSession(options?: CreateSessionOptions): Promise<SessionInfo> {
-  const res = await fetch("/api/sessions", {
+  const res = await fetch(`${apiBase()}/api/sessions`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(options ?? {}),
@@ -21,13 +25,13 @@ export async function createSession(options?: CreateSessionOptions): Promise<Ses
 }
 
 export async function listSessions(): Promise<SessionInfo[]> {
-  const res = await fetch("/api/sessions");
+  const res = await fetch(`${apiBase()}/api/sessions`);
   if (!res.ok) throw new Error(`Failed to list sessions: ${res.status}`);
   return (await res.json()) as SessionInfo[];
 }
 
 export async function deleteSession(sessionId: string): Promise<void> {
-  await fetch(`/api/sessions/${sessionId}`, { method: "DELETE" });
+  await fetch(`${apiBase()}/api/sessions/${sessionId}`, { method: "DELETE" });
 }
 
 export interface IssueListItem {
@@ -38,13 +42,13 @@ export interface IssueListItem {
 }
 
 export async function listIssues(): Promise<IssueListItem[]> {
-  const res = await fetch("/api/issues");
+  const res = await fetch(`${apiBase()}/api/issues`);
   if (!res.ok) throw new Error(`Failed to list issues: ${res.status}`);
   return (await res.json()) as IssueListItem[];
 }
 
 export async function listGitHubRepositories(): Promise<string[]> {
-  const res = await fetch("/api/github/repositories");
+  const res = await fetch(`${apiBase()}/api/github/repositories`);
   if (!res.ok) throw new Error(`Failed to list repositories: ${res.status}`);
   return (await res.json()) as string[];
 }

@@ -1,19 +1,10 @@
 import { execSync } from "node:child_process";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { test, expect } from "@playwright/test";
-
-test.describe.configure({ mode: "serial" });
-
-const DEFAULT_SETTINGS = {
-  issue_provider: "github",
-  issue_provider__github__github_token: "",
-  default_agent_framework: "claude",
-};
+import { test, expect } from "./fixtures.js";
 
 const userId = execSync("whoami").toString().trim();
-const issuesDir = join(__dirname, "..", "packages", "server", ".vibx2-data", userId, "issues");
 
 function serializeIssue(opts: { title: string; status: string; labels: string[]; body: string }): string {
   let fm = "---\n";
@@ -27,33 +18,21 @@ function serializeIssue(opts: { title: string; status: string; labels: string[];
   return fm + opts.body + "\n";
 }
 
-async function seedIssue(number: number, opts: { title: string; status: string; labels: string[]; body: string }): Promise<void> {
-  const dir = join(issuesDir, String(number));
+function issuesDir(dataDir: string): string {
+  return join(dataDir, userId, "issues");
+}
+
+async function seedIssue(dataDir: string, number: number, opts: { title: string; status: string; labels: string[]; body: string }): Promise<void> {
+  const dir = join(issuesDir(dataDir), String(number));
   await mkdir(dir, { recursive: true });
   await writeFile(join(dir, "issue.md"), serializeIssue(opts));
 }
 
-async function seedHistory(lines: string): Promise<void> {
-  await mkdir(issuesDir, { recursive: true });
-  await writeFile(join(issuesDir, "history.log"), lines);
+async function seedHistory(dataDir: string, lines: string): Promise<void> {
+  const dir = issuesDir(dataDir);
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, "history.log"), lines);
 }
-
-test.beforeEach(async ({ page }) => {
-  // Reset settings to no GitHub token (so FS backend is used)
-  await page.goto("/settings");
-  await page.evaluate(
-    (defaults) =>
-      fetch("/api/settings", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(defaults),
-      }),
-    DEFAULT_SETTINGS,
-  );
-
-  // Clear the issues directory
-  await rm(issuesDir, { recursive: true, force: true });
-});
 
 test("issues page shows empty state when no issues exist", async ({ page }) => {
   await page.goto("/issues");
@@ -62,12 +41,12 @@ test("issues page shows empty state when no issues exist", async ({ page }) => {
   await expect(page.getByText("No open issues found.")).toBeVisible({ timeout: 5_000 });
 });
 
-test("issues page renders list from filesystem", async ({ page }) => {
+test("issues page renders list from filesystem", async ({ page, server }) => {
   // Seed issues on disk
-  await seedIssue(1, { title: "Fix login bug", status: "todo", labels: [], body: "" });
-  await seedIssue(42, { title: "Add dark mode", status: "in_progress", labels: ["status:in_progress"], body: "" });
-  await seedIssue(7, { title: "Review auth flow", status: "in_review", labels: ["status:in_review"], body: "" });
-  await seedHistory("1 todo\n42 in_progress\n7 in_review\n");
+  await seedIssue(server.dataDir, 1, { title: "Fix login bug", status: "todo", labels: [], body: "" });
+  await seedIssue(server.dataDir, 42, { title: "Add dark mode", status: "in_progress", labels: ["status:in_progress"], body: "" });
+  await seedIssue(server.dataDir, 7, { title: "Review auth flow", status: "in_review", labels: ["status:in_review"], body: "" });
+  await seedHistory(server.dataDir, "1 todo\n42 in_progress\n7 in_review\n");
 
   await page.goto("/issues");
 
@@ -84,10 +63,10 @@ test("issues page renders list from filesystem", async ({ page }) => {
   await expect(page.getByText("In Review")).toBeVisible();
 });
 
-test("issues page filters out done issues", async ({ page }) => {
-  await seedIssue(1, { title: "Open issue", status: "todo", labels: [], body: "" });
-  await seedIssue(2, { title: "Closed issue", status: "done", labels: [], body: "" });
-  await seedHistory("1 todo\n2 done\n");
+test("issues page filters out done issues", async ({ page, server }) => {
+  await seedIssue(server.dataDir, 1, { title: "Open issue", status: "todo", labels: [], body: "" });
+  await seedIssue(server.dataDir, 2, { title: "Closed issue", status: "done", labels: [], body: "" });
+  await seedHistory(server.dataDir, "1 todo\n2 done\n");
 
   await page.goto("/issues");
 

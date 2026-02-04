@@ -1,4 +1,5 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect } from "./fixtures.js";
+import type { Page } from "@playwright/test";
 
 function getTerminalBufferContent(page: Page, selector: string) {
   return page.evaluate((sel) => {

@@ -1,4 +1,4 @@
-import { createSession } from "./api.js";
+import { createSession, listSessions } from "./api.js";
 import { createTerminalConnection } from "./terminal.js";
 import { createPaneManager } from "./panes.js";
 import type { PaneManager } from "./panes.js";
@@ -12,6 +12,7 @@ interface Tab {
 
 export interface TabManager {
   addTab: () => Promise<void>;
+  restoreOrAddTab: () => Promise<void>;
   closeTab: (id: string) => void;
   switchToTab: (id: string) => void;
   nextTab: () => void;
@@ -114,6 +115,15 @@ async function addNewTab(state: TabState, terminalArea: HTMLDivElement): Promise
   return id;
 }
 
+function restoreExistingTab(state: TabState, terminalArea: HTMLDivElement, sessionId: string): string {
+  state.tabCounter++;
+  const pm = createPaneManager({ initialConnection: createTerminalConnection(sessionId) });
+  terminalArea.appendChild(pm.element);
+  const id = `tab-${state.tabCounter}`;
+  state.tabs.push({ id, label: `Terminal ${state.tabCounter}`, paneManager: pm, tabElement: document.createElement("div") });
+  return id;
+}
+
 interface TabActions {
   switchFn: (id: string) => void;
   renderFn: () => void;
@@ -140,11 +150,22 @@ export function createTabManager(container: HTMLElement): TabManager {
 
   function switchToTab(id: string) { switchTab(state, id); render(); }
   async function addTab() { switchToTab(await addNewTab(state, dom.terminalArea)); }
+  async function restoreOrAddTab() {
+    const sessions = await listSessions();
+    if (sessions.length === 0) {
+      await addTab();
+      return;
+    }
+    for (const session of sessions) {
+      const id = restoreExistingTab(state, dom.terminalArea, session.sessionId);
+      switchToTab(id);
+    }
+  }
   function closeTab(id: string) { removeTab(state, id, { switchFn: switchToTab, renderFn: render }); }
   const getActive = (): Tab | null => state.tabs.find((t) => t.id === state.activeTabId) ?? null;
 
   return {
-    addTab, closeTab, switchToTab,
+    addTab, restoreOrAddTab, closeTab, switchToTab,
     nextTab: () => { const id = cycleTab(state, 1); if (id) switchToTab(id); },
     prevTab: () => { const id = cycleTab(state, -1); if (id) switchToTab(id); },
     async splitVertical() { const t = getActive(); if (t) await t.paneManager.splitVertical(); },

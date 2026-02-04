@@ -11,11 +11,6 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: "bun run --filter '@vibx2/server' dev",
-      port: 3000,
-      reuseExistingServer: !process.env["CI"],
-    },
-    {
       command: "bun run --filter '@vibx2/client' dev",
       port: 5173,
       reuseExistingServer: !process.env["CI"],

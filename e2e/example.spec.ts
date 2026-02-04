@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures.js";
 
 test("terminal session runs echo Hello World", async ({ page }) => {
   await page.goto("/");

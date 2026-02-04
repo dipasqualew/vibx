@@ -3,3 +3,7 @@ declare module "*.vue" {
   const component: DefineComponent;
   export default component;
 }
+
+interface Window {
+  __VIBX_SERVER_URL?: string;
+}
