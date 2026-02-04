@@ -49,18 +49,23 @@ echo ""
 echo "Starting Claude Code..."
 (cd "$worktree_dir" && claude "/issue-solve $url") || true
 
-# Cleanup
+# Merge commits into main
 echo ""
-echo "Claude Code exited. Cleaning up worktree..."
+echo "Claude Code exited. Merging commits into main..."
 git worktree remove "$worktree_dir"
 echo "Removed worktree at $worktree_dir"
 
-# Delete branch only if it was fully merged
-if git branch --merged main | grep -q "$branch"; then
+# Check if the branch has any commits beyond main
+if git log "main..${branch}" --oneline | grep -q .; then
+  # Rebase branch onto current main (which may have moved), then fast-forward
+  git rebase main "$branch"
+  git checkout main
+  git merge --ff-only "$branch"
   git branch -d "$branch"
-  echo "Deleted merged branch $branch"
+  echo "Rebased $branch onto main and fast-forward merged"
 else
-  echo "Branch $branch is not merged into main — keeping it"
+  git branch -d "$branch" 2>/dev/null || git branch -D "$branch"
+  echo "No new commits on $branch — deleted branch"
 fi
 
 cd "$origin_dir"
