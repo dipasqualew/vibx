@@ -87,7 +87,11 @@ export function createTerminalConnection(sessionId: string): TerminalConnection 
   const connection: TerminalConnection = { sessionId, terminal, element, onExit: null, dispose };
 
   ws.addEventListener("message", (event: MessageEvent) => {
-    handleServerMessage(JSON.parse(event.data as string) as ServerMessage, terminal, connection);
+    const msg = JSON.parse(event.data as string) as ServerMessage;
+    if (msg.type === "output" && !element.dataset["wsReady"]) {
+      element.dataset["wsReady"] = "true";
+    }
+    handleServerMessage(msg, terminal, connection);
   });
 
   ws.addEventListener("open", () => {

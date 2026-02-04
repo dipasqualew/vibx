@@ -3,7 +3,16 @@ import type { Page } from "@playwright/test";
 
 function getTerminalBufferContent(page: Page, selector: string) {
   return page.evaluate((sel) => {
-    const el = document.querySelector(sel);
+    // Find all matching elements and pick the one that is visible
+    const elements = document.querySelectorAll(sel);
+    let el: Element | null = null;
+    for (const candidate of elements) {
+      if ((candidate as HTMLElement).offsetParent !== null) {
+        el = candidate;
+        break;
+      }
+    }
+    if (!el) el = document.querySelector(sel);
     // @ts-expect-error — xterm stores the Terminal instance on the element
     const term = (el as Record<string, unknown>)?.__terminal;
     if (!term) return "";
@@ -18,6 +27,10 @@ function getTerminalBufferContent(page: Page, selector: string) {
 }
 
 async function waitForPrompt(page: Page, selector: string) {
+  // Wait for the WebSocket connection to be established before polling the buffer
+  await expect(page.locator(`${selector}[data-ws-ready]`).first()).toBeAttached({
+    timeout: 10_000,
+  });
   await expect
     .poll(() => getTerminalBufferContent(page, selector), {
       timeout: 10_000,
@@ -80,30 +93,70 @@ test("multiple tabs persist across tab navigation", async ({ page }) => {
   await expect(page.locator(".xterm").first()).toBeVisible({ timeout: 10_000 });
   await waitForPrompt(page, ".terminal-container");
 
+  // Set a marker in the first tab
+  const tab1Input = page.locator(".xterm textarea").first();
+  await tab1Input.pressSequentially("export VIBX_TAB=tab1_marker");
+  await tab1Input.press("Enter");
+  await expect
+    .poll(() => getTerminalBufferContent(page, ".terminal-container"), {
+      timeout: 5_000,
+    })
+    .toContain("VIBX_TAB=tab1_marker");
+
   // Open a second tab with Cmd+T
   await page.keyboard.press("Meta+t");
   await expect(page.locator(".tab")).toHaveCount(2, { timeout: 5_000 });
 
-  // Navigate away
-  await page.locator(".v-app-bar").getByText("Settings").click();
-  await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible({
+  // Wait for the second tab's terminal to be ready
+  await waitForPrompt(page, ".terminal-container");
+
+  // Set a different marker in the second tab
+  const tab2Input = page.locator(".xterm textarea").first();
+  await tab2Input.pressSequentially("export VIBX_TAB=tab2_marker");
+  await tab2Input.press("Enter");
+  await expect
+    .poll(() => getTerminalBufferContent(page, ".terminal-container"), {
+      timeout: 5_000,
+    })
+    .toContain("VIBX_TAB=tab2_marker");
+
+  // Switch back to the first tab
+  await page.locator(".tab .tab-label").first().click();
+  await expect(page.locator(".tab").first()).toHaveClass(/active/, {
     timeout: 5_000,
   });
 
-  // Navigate back
-  await page.locator(".v-app-bar").getByText("Terminal").click();
-
-  // Both tabs should be restored
-  await expect(page.locator(".tab")).toHaveCount(2, { timeout: 10_000 });
-
-  // The active tab's terminal should be visible
-  await expect(page.locator(".tab.active")).toHaveCount(1, { timeout: 5_000 });
-
-  // The terminal may have been recreated with an empty buffer, so press Enter
-  // to trigger a fresh prompt before waiting.
-  const restoredInput = page.locator(".xterm textarea").first();
-  await restoredInput.press("Enter");
+  // Verify first tab's marker is still there
+  const tab1RestoredInput = page.locator(".xterm textarea").first();
+  await tab1RestoredInput.press("Enter");
   await waitForPrompt(page, ".terminal-container");
+  await tab1RestoredInput.pressSequentially("echo $VIBX_TAB");
+  await tab1RestoredInput.press("Enter");
+  await expect
+    .poll(() => getTerminalBufferContent(page, ".terminal-container"), {
+      timeout: 5_000,
+      message: "waiting for tab1 marker after switching back",
+    })
+    .toContain("tab1_marker");
+
+  // Switch to the second tab
+  await page.locator(".tab .tab-label").nth(1).click();
+  await expect(page.locator(".tab").nth(1)).toHaveClass(/active/, {
+    timeout: 5_000,
+  });
+
+  // Verify second tab's marker is still there
+  const tab2RestoredInput = page.locator(".xterm textarea").first();
+  await tab2RestoredInput.press("Enter");
+  await waitForPrompt(page, ".terminal-container");
+  await tab2RestoredInput.pressSequentially("echo $VIBX_TAB");
+  await tab2RestoredInput.press("Enter");
+  await expect
+    .poll(() => getTerminalBufferContent(page, ".terminal-container"), {
+      timeout: 5_000,
+      message: "waiting for tab2 marker after switching back",
+    })
+    .toContain("tab2_marker");
 });
 
 test("terminal sessions persist across page refresh", async ({ page }) => {

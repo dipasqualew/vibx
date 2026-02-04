@@ -3,7 +3,16 @@ import type { Page } from "@playwright/test";
 
 function getTerminalBufferContent(page: Page, selector: string) {
   return page.evaluate((sel) => {
-    const el = document.querySelector(sel);
+    // Find all matching elements and pick the one that is visible
+    const elements = document.querySelectorAll(sel);
+    let el: Element | null = null;
+    for (const candidate of elements) {
+      if ((candidate as HTMLElement).offsetParent !== null) {
+        el = candidate;
+        break;
+      }
+    }
+    if (!el) el = document.querySelector(sel);
     // @ts-expect-error — xterm stores the Terminal instance on the element
     const term = (el as Record<string, unknown>)?.__terminal;
     if (!term) return "";
@@ -18,6 +27,10 @@ function getTerminalBufferContent(page: Page, selector: string) {
 }
 
 async function waitForPrompt(page: Page, selector: string) {
+  // Wait for the WebSocket connection to be established before polling the buffer
+  await expect(page.locator(`${selector}[data-ws-ready]`).first()).toBeAttached({
+    timeout: 10_000,
+  });
   await expect
     .poll(() => getTerminalBufferContent(page, selector), {
       timeout: 10_000,
@@ -111,6 +124,7 @@ test("closing a pane via exit recomputes layout", async ({ page }) => {
   const activePaneLeaf = page.locator(".pane-leaf:not(.dimmed)");
   const activeTermContainer = activePaneLeaf.locator(".terminal-container");
   await expect(activeTermContainer).toBeVisible({ timeout: 5_000 });
+  await waitForPrompt(page, ".pane-leaf:not(.dimmed) .terminal-container");
 
   // Find the xterm textarea inside the active pane and type exit
   const xtermInput = activePaneLeaf.locator(".xterm textarea");
@@ -138,15 +152,17 @@ test("closing panes until one remains fills the space", async ({ page }) => {
   await page.keyboard.press("Meta+d");
   await expect(page.locator(".pane-leaf")).toHaveCount(3, { timeout: 5_000 });
 
-  // Close active pane (rightmost)
+  // Close active pane (rightmost) — wait for its shell to be ready first
   let activePaneLeaf = page.locator(".pane-leaf:not(.dimmed)");
+  await waitForPrompt(page, ".pane-leaf:not(.dimmed) .terminal-container");
   let xtermInput = activePaneLeaf.locator(".xterm textarea");
   await xtermInput.pressSequentially("exit");
   await xtermInput.press("Enter");
   await expect(page.locator(".pane-leaf")).toHaveCount(2, { timeout: 10_000 });
 
-  // Close next active pane
+  // Close next active pane — wait for its shell to be ready first
   activePaneLeaf = page.locator(".pane-leaf:not(.dimmed)");
+  await waitForPrompt(page, ".pane-leaf:not(.dimmed) .terminal-container");
   xtermInput = activePaneLeaf.locator(".xterm textarea");
   await xtermInput.pressSequentially("exit");
   await xtermInput.press("Enter");
